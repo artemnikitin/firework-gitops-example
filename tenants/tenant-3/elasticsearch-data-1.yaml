@@ -1,0 +1,40 @@
+# Tenant-3 Elasticsearch data node 1 — premium tier, 2-node cluster
+# Anti-affinity ensures this node is placed on a different EC2 instance than data-2.
+# The enricher injects discovery.seed_hosts with the peer node's transport address,
+# which ES 8.x reads natively without extra wiring.
+source_image: "docker.elastic.co/elasticsearch/elasticsearch:8.17.10"
+rootfs_size_mb: 4096
+node_type: "backend"
+vcpus: 4
+memory_mb: 4096
+kernel_args: "console=ttyS0 reboot=k panic=1 pci=off init=/sbin/fc-init /bin/tini -- /usr/local/bin/docker-entrypoint.sh eswrapper"
+network: true
+anti_affinity_group: "es-tenant-3"
+port_forwards:
+  - host_port: 19200
+    vm_port: 9200
+  - host_port: 19300
+    vm_port: 9300
+health_check:
+  type: "tcp"
+  port: 9300
+  interval: "20s"
+  timeout: "5s"
+  retries: 3
+node_host_ip_env: "transport.publish_host"
+cross_node_links:
+  - service: "elasticsearch-data-2"
+    env: "discovery.seed_hosts"
+    host_port: 19300
+env:
+  cluster.name: "tenant-3"
+  node.name: "es-data-1"
+  cluster.initial_master_nodes: "es-data-1,es-data-2"
+  xpack.security.enabled: "false"
+  transport.publish_port: "19300"
+metadata:
+  tenant: "tenant-3"
+  tier: "premium"
+  version: "8.17.10"
+  host: "es.artemnikitin.com"
+

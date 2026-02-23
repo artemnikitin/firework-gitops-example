@@ -1,0 +1,15 @@
+# Elasticsearch configuration — MVP single-node deployment.
+# This file is overlaid into the rootfs at build time by docker-to-rootfs.sh.
+
+cluster.name: "firework"
+node.name: "es-01"
+
+# Listen on all interfaces so other microVMs on the bridge can connect.
+network.host: 0.0.0.0
+
+# Single-node discovery (no cluster formation).
+discovery.type: single-node
+
+# Disable security for MVP simplicity.
+# For production, enable security and configure TLS.
+xpack.security.enabled: false

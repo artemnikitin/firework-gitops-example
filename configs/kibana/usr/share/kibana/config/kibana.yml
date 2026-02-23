@@ -1,0 +1,14 @@
+# Kibana configuration — MVP deployment.
+# This file is overlaid into the rootfs at build time by docker-to-rootfs.sh.
+
+# Listen on all interfaces so the host can proxy traffic from the ALB.
+server.host: "0.0.0.0"
+server.name: "kibana"
+
+# Elasticsearch connection.
+# ELASTICSEARCH_HOSTS is injected at runtime by the firework agent via
+# service links (see services/kibana.yaml). No need to hardcode IPs.
+elasticsearch.hosts: ["${ELASTICSEARCH_HOSTS}"]
+
+# NOTE: Kibana 9 validates settings strictly; avoid deprecated/removed keys.
+# For production, configure security and TLS explicitly via supported options.
