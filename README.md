@@ -1,5 +1,7 @@
 # firework-gitops-example
 
+> This is an example deployment intended for demonstration and learning purposes only. It is not hardened, audited, etc.
+
 Example GitOps repository for [Firework](https://github.com/artemnikitin/firework), focused on building Firecracker-ready rootfs images from Docker images and publishing them to S3.
 
 ## Related Repositories
