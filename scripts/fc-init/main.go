@@ -23,7 +23,16 @@ import (
 	"syscall"
 )
 
-const runtimeMetadataPath = "/etc/firework/runtime.json"
+const (
+	runtimeMetadataPath = "/etc/firework/runtime.json"
+
+	vmMaxMapCountPath  = "/proc/sys/vm/max_map_count"
+	vmMaxMapCountValue = "262144"
+	minNoFileLimit     = 65535
+
+	kibanaUUIDPath            = "/usr/share/kibana/data/uuid"
+	elasticsearchKeystorePath = "/usr/share/elasticsearch/config/elasticsearch.keystore"
+)
 
 type runtimeMetadata struct {
 	User          string            `json:"user,omitempty"`
@@ -35,6 +44,7 @@ type runtimeMetadata struct {
 func main() {
 	mountAll()
 	setHostname()
+	applyRuntimeTuning()
 	meta := loadRuntimeMetadata()
 	applyImageEnv(meta.Env)
 	exportFireworkEnv()
@@ -127,6 +137,8 @@ func execService(meta runtimeMetadata) {
 	if len(argv) == 0 {
 		argv = []string{"/sbin/init"}
 	}
+
+	sanitizeRuntimeState()
 
 	if meta.Workdir != "" {
 		if err := os.Chdir(meta.Workdir); err != nil {
@@ -317,4 +329,130 @@ func parseRequiredID(s string) (int, error) {
 		return 0, fmt.Errorf("negative id %d", n)
 	}
 	return n, nil
+}
+
+func applyRuntimeTuning() {
+	if err := os.WriteFile(vmMaxMapCountPath, []byte(vmMaxMapCountValue), 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, "fc-init: set vm.max_map_count=%s: %v\n", vmMaxMapCountValue, err)
+	}
+	if err := ensureNoFileLimit(minNoFileLimit); err != nil {
+		fmt.Fprintf(os.Stderr, "fc-init: set nofile limit: %v\n", err)
+	}
+}
+
+func ensureNoFileLimit(min uint64) error {
+	var lim syscall.Rlimit
+	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &lim); err != nil {
+		return fmt.Errorf("getrlimit: %w", err)
+	}
+
+	newCur := lim.Cur
+	newMax := lim.Max
+	if newCur < min {
+		newCur = min
+	}
+	if newMax < min {
+		newMax = min
+	}
+	if newCur == lim.Cur && newMax == lim.Max {
+		return nil
+	}
+
+	if err := syscall.Setrlimit(syscall.RLIMIT_NOFILE, &syscall.Rlimit{
+		Cur: newCur,
+		Max: newMax,
+	}); err != nil {
+		return fmt.Errorf("setrlimit: %w", err)
+	}
+	return nil
+}
+
+func sanitizeRuntimeState() {
+	sanitizeKibanaUUID(kibanaUUIDPath)
+	sanitizeElasticsearchKeystore(elasticsearchKeystorePath)
+}
+
+func sanitizeKibanaUUID(path string) {
+	data, ok := readSmallFile(path)
+	if !ok {
+		return
+	}
+	uuid := strings.TrimSpace(string(data))
+	if uuid == "" || !isValidUUID(uuid) {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "fc-init: remove invalid kibana uuid %s: %v\n", path, err)
+			return
+		}
+		fmt.Fprintf(os.Stderr, "fc-init: removed invalid kibana uuid file %s\n", path)
+	}
+}
+
+func sanitizeElasticsearchKeystore(path string) {
+	info, err := os.Stat(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "fc-init: stat %s: %v\n", path, err)
+		}
+		return
+	}
+	if !info.Mode().IsRegular() {
+		return
+	}
+	// Elasticsearch expects a non-empty keystore file. Size < 16 strongly
+	// indicates corruption (e.g. zero-byte files observed in crash loops).
+	if info.Size() >= 16 {
+		return
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "fc-init: remove invalid elasticsearch keystore %s: %v\n", path, err)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "fc-init: removed invalid elasticsearch keystore %s\n", path)
+}
+
+func readSmallFile(path string) ([]byte, bool) {
+	info, err := os.Stat(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "fc-init: stat %s: %v\n", path, err)
+		}
+		return nil, false
+	}
+	if !info.Mode().IsRegular() {
+		return nil, false
+	}
+	if info.Size() > 1024 {
+		fmt.Fprintf(os.Stderr, "fc-init: %s too large for UUID file\n", path)
+		return nil, false
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fc-init: read %s: %v\n", path, err)
+		return nil, false
+	}
+	return data, true
+}
+
+func isValidUUID(v string) bool {
+	if len(v) != 36 {
+		return false
+	}
+	for i := 0; i < len(v); i++ {
+		c := v[i]
+		switch i {
+		case 8, 13, 18, 23:
+			if c != '-' {
+				return false
+			}
+		default:
+			if !isHex(c) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func isHex(c byte) bool {
+	return ('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F')
 }

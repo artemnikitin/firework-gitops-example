@@ -176,6 +176,10 @@ if [ -f "$ROOTFS/usr/share/kibana/data/uuid" ]; then
     echo "==> Removing stale Kibana UUID file from rootfs"
     rm -f "$ROOTFS/usr/share/kibana/data/uuid"
 fi
+if [ -f "$ROOTFS/usr/share/elasticsearch/config/elasticsearch.keystore" ]; then
+    echo "==> Removing Elasticsearch keystore from rootfs (recreated at boot)"
+    rm -f "$ROOTFS/usr/share/elasticsearch/config/elasticsearch.keystore"
+fi
 
 # Write Docker-derived runtime metadata consumed by /sbin/fc-init.
 echo "==> Writing /etc/firework/runtime.json"
@@ -209,7 +213,7 @@ INIT_EOF
 chmod 755 "$ROOTFS/sbin/init"
 
 # Ensure essential directories exist in the rootfs.
-mkdir -p "$ROOTFS"/{proc,sys,dev,tmp,var/run}
+mkdir -p "$ROOTFS"/{proc,sys,dev,tmp,var}
 
 echo "==> Building ext4 image (${SIZE_MB}M)"
 dd if=/dev/zero of="$OUTPUT" bs=1M count="$SIZE_MB" status=none
