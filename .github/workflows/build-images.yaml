@@ -82,9 +82,12 @@ jobs:
               size_mb="$(yq '.rootfs_size_mb // 512' "$svc_file")"
               output="${tenant_id}-${base_name}-rootfs.ext4"
 
-              # Config overlay: tenant-specific overlay takes precedence.
+              # Config overlays: shared baseline applied first, tenant-specific on top.
+              # Pass as a colon-separated list so docker-to-rootfs.sh applies them in order.
               overlay_arg=""
-              if [ -d "configs/${tenant_id}-${base_name}" ]; then
+              if [ -d "configs/${base_name}" ] && [ -d "configs/${tenant_id}-${base_name}" ]; then
+                overlay_arg="configs/${base_name}:configs/${tenant_id}-${base_name}"
+              elif [ -d "configs/${tenant_id}-${base_name}" ]; then
                 overlay_arg="configs/${tenant_id}-${base_name}"
               elif [ -d "configs/${base_name}" ]; then
                 overlay_arg="configs/${base_name}"

@@ -42,7 +42,7 @@ The `build-images` workflow does the following on relevant pushes:
 2. Iterates over `tenants/*/*.yaml`.
 3. Reads `source_image` and optional `rootfs_size_mb` from each tenant file.
 4. Builds `<tenant>-<service>-rootfs.ext4` via `scripts/docker-to-rootfs.sh`.
-5. Selects one config overlay directory (if present):
-   - `configs/<tenant>-<service>/` (tenant-specific, checked first)
-   - `configs/<service>/` (shared, used as fallback when no tenant-specific overlay exists)
+5. Applies config overlays in order (shared baseline first, tenant-specific on top):
+   - `configs/<service>/` (shared baseline, applied first if present)
+   - `configs/<tenant>-<service>/` (tenant-specific, applied on top if present, overrides shared)
 6. Uploads resulting `*-rootfs.ext4` artifacts to S3.
