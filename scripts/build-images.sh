@@ -11,9 +11,10 @@ if [[ "$CACHE_BIN_DIR" != /* ]]; then
     CACHE_BIN_DIR="$REPO_ROOT/$CACHE_BIN_DIR"
 fi
 
-FC_INIT_BIN="${FC_INIT_BIN:-$CACHE_BIN_DIR/fc-init}"
-if [[ "$FC_INIT_BIN" != /* ]]; then
-    FC_INIT_BIN="$REPO_ROOT/$FC_INIT_BIN"
+TARGET_PLATFORM="${TARGET_PLATFORM:-linux/arm64}"
+FC_INIT_BIN_INPUT="${FC_INIT_BIN:-}"
+if [[ -n "$FC_INIT_BIN_INPUT" && "$FC_INIT_BIN_INPUT" != /* ]]; then
+    FC_INIT_BIN_INPUT="$REPO_ROOT/$FC_INIT_BIN_INPUT"
 fi
 
 configure_tool_paths() {
@@ -30,18 +31,39 @@ configure_tool_paths() {
     fi
 }
 
-install_fc_init_from_main() {
+platform_arch() {
+    local platform="$1"
+
+    case "$platform" in
+        linux/amd64)
+            printf '%s\n' "amd64"
+            ;;
+        linux/arm64)
+            printf '%s\n' "arm64"
+            ;;
+        *)
+            echo "ERROR: unsupported target platform: $platform" >&2
+            echo "Supported platforms: linux/amd64, linux/arm64" >&2
+            exit 1
+            ;;
+    esac
+}
+
+install_fc_init_from_ref() {
+    local ref="$1"
+    local goarch="$2"
+    local output="$3"
     local go_path="$REPO_ROOT/.cache/go"
     local installed_bin
 
-    mkdir -p "$go_path" "$(dirname "$FC_INIT_BIN")"
+    mkdir -p "$go_path" "$(dirname "$output")"
 
-    GOPATH="$go_path" GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
-        go install github.com/artemnikitin/firework/cmd/fc-init@main
+    GOPATH="$go_path" GOOS=linux GOARCH="$goarch" CGO_ENABLED=0 \
+        go install "github.com/artemnikitin/firework/cmd/fc-init@${ref}"
 
     installed_bin="$go_path/bin/fc-init"
     if [ ! -f "$installed_bin" ]; then
-        installed_bin="$go_path/bin/linux_arm64/fc-init"
+        installed_bin="$go_path/bin/linux_${goarch}/fc-init"
     fi
 
     if [ ! -f "$installed_bin" ]; then
@@ -49,12 +71,36 @@ install_fc_init_from_main() {
         return 1
     fi
 
-    cp "$installed_bin" "$FC_INIT_BIN"
-    chmod +x "$FC_INIT_BIN"
+    cp "$installed_bin" "$output"
+    chmod +x "$output"
+}
+
+configure_firework_github_access() {
+    if [ -n "${FIREWORK_GITHUB_TOKEN:-}" ]; then
+        export GOPRIVATE='github.com/artemnikitin/*'
+        export GIT_CONFIG_COUNT=1
+        export GIT_CONFIG_KEY_0="url.https://x-access-token:${FIREWORK_GITHUB_TOKEN}@github.com/.insteadOf"
+        export GIT_CONFIG_VALUE_0="https://github.com/"
+    fi
 }
 
 resolve_fc_init() {
+    local platform="$1"
+    local output="$2"
+    local goarch
+    goarch="$(platform_arch "$platform")"
+
     mkdir -p "$CACHE_BIN_DIR"
+
+    if [ -n "$FC_INIT_BIN_INPUT" ]; then
+        if [ ! -x "$FC_INIT_BIN_INPUT" ]; then
+            echo "ERROR: FC_INIT_BIN is not executable: $FC_INIT_BIN_INPUT" >&2
+            exit 1
+        fi
+        return
+    fi
+
+    configure_firework_github_access
 
     if [ -n "${FC_INIT_VERSION:-}" ]; then
         local tag
@@ -62,25 +108,24 @@ resolve_fc_init() {
         tag="v${tag}"
 
         local url
-        url="https://github.com/artemnikitin/firework/releases/download/${tag}/fc-init-linux-arm64"
-        echo "Downloading fc-init from release ${tag}"
-        curl -fsSL "$url" -o "$FC_INIT_BIN"
-        chmod +x "$FC_INIT_BIN"
+        url="https://github.com/artemnikitin/firework/releases/download/${tag}/fc-init-linux-${goarch}"
+        echo "Downloading fc-init for ${platform} from release ${tag}"
+        if curl -fsSL "$url" -o "$output"; then
+            chmod +x "$output"
+            return
+        fi
+
+        echo "::warning::Release asset fc-init-linux-${goarch} was not found for ${tag}. Building fc-init from source tag ${tag}."
+        install_fc_init_from_ref "$tag" "$goarch" "$output"
         return
     fi
 
-    echo "FC_INIT_VERSION not set; building fc-init from firework@main"
-    if [ -n "${FIREWORK_GITHUB_TOKEN:-}" ]; then
-        export GOPRIVATE='github.com/artemnikitin/*'
-        export GIT_CONFIG_COUNT=1
-        export GIT_CONFIG_KEY_0="url.https://x-access-token:${FIREWORK_GITHUB_TOKEN}@github.com/.insteadOf"
-        export GIT_CONFIG_VALUE_0="https://github.com/"
-    fi
+    echo "FC_INIT_VERSION not set; building fc-init for ${platform} from firework@main"
 
-    if ! install_fc_init_from_main; then
+    if ! install_fc_init_from_ref "main" "$goarch" "$output"; then
         echo "::warning::Failed to build fc-init from firework@main. Falling back to bundled source."
-        GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
-            go build -ldflags "-s -w" -o "$FC_INIT_BIN" ./scripts/fc-init/main.go
+        GOOS=linux GOARCH="$goarch" CGO_ENABLED=0 \
+            go build -ldflags "-s -w" -o "$output" ./scripts/fc-init/main.go
     fi
 }
 
@@ -130,11 +175,14 @@ yaml_value() {
 }
 
 build_images() {
+    local platform="$1"
+    local fc_init_bin="$2"
+
     for tenant_dir in tenants/*/; do
         [ -d "$tenant_dir" ] || continue
         local tenant_id
         tenant_id="$(basename "$tenant_dir")"
-        echo "::group::Tenant: $tenant_id"
+        echo "::group::Tenant: $tenant_id ($platform)"
 
         for svc_file in "${tenant_dir}"*.yaml "${tenant_dir}"*.yml; do
             [ -f "$svc_file" ] || continue
@@ -160,7 +208,7 @@ build_images() {
 
             echo "Building $output from $source_image"
             bash ./scripts/docker-to-rootfs.sh "$source_image" "$output" "$size_mb" \
-                "${overlay_arg:-}" "$FC_INIT_BIN"
+                "${overlay_arg:-}" "$fc_init_bin" "$platform"
         done
 
         echo "::endgroup::"
@@ -168,5 +216,7 @@ build_images() {
 }
 
 configure_tool_paths
-resolve_fc_init
-build_images
+TARGET_ARCH="$(platform_arch "$TARGET_PLATFORM")"
+FC_INIT_BIN_FOR_PLATFORM="${FC_INIT_BIN_INPUT:-$CACHE_BIN_DIR/fc-init-linux-$TARGET_ARCH}"
+resolve_fc_init "$TARGET_PLATFORM" "$FC_INIT_BIN_FOR_PLATFORM"
+build_images "$TARGET_PLATFORM" "$FC_INIT_BIN_FOR_PLATFORM"

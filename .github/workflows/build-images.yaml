@@ -3,23 +3,22 @@ name: Build rootfs images
 on:
   push:
     branches: [main]
-    paths:
-      - "tenants/**"
-      - "configs/**"
-      - "scripts/**"
-      - "Makefile"
-      - ".github/workflows/build-images.yaml"
   pull_request:
-    paths:
-      - "tenants/**"
-      - "configs/**"
-      - "scripts/**"
-      - "Makefile"
-      - ".github/workflows/build-images.yaml"
 
 jobs:
   build:
-    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target_platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            yq_arch: arm64
+          - target_platform: linux/amd64
+            runner: ubuntu-24.04
+            yq_arch: amd64
+
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - uses: actions/checkout@v4
@@ -36,17 +35,18 @@ jobs:
 
       - name: Install yq
         run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_arm64
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${{ matrix.yq_arch }}
           sudo chmod +x /usr/local/bin/yq
 
-      - name: Build per-tenant rootfs images
+      - name: Build per-tenant rootfs images (${{ matrix.target_platform }})
         env:
+          TARGET_PLATFORM: ${{ matrix.target_platform }}
           FC_INIT_VERSION: ${{ vars.FC_INIT_VERSION }}
           FIREWORK_GITHUB_TOKEN: ${{ secrets.FIREWORK_GITHUB_TOKEN }}
         run: make build
 
       - name: Upload images to S3
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.target_platform == 'linux/arm64'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

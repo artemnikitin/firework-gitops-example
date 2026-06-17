@@ -1,7 +1,15 @@
-.PHONY: build push
+TARGET_PLATFORM ?= linux/arm64
+
+.PHONY: build build-amd64 build-arm64 push
 
 build:
-	bash ./scripts/build-images.sh
+	TARGET_PLATFORM="$(TARGET_PLATFORM)" bash ./scripts/build-images.sh
+
+build-amd64:
+	TARGET_PLATFORM=linux/amd64 bash ./scripts/build-images.sh
+
+build-arm64:
+	TARGET_PLATFORM=linux/arm64 bash ./scripts/build-images.sh
 
 push:
 	bash ./scripts/push-images.sh
