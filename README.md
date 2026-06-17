@@ -36,13 +36,24 @@ flowchart LR
 
 ## CI Image Pipeline
 
-The `build-images` workflow does the following on relevant pushes:
+The `build-images` workflow installs CI dependencies, then delegates image work to
+the Makefile. The Makefile is a thin entrypoint that calls the shell scripts in
+`scripts/`:
 
-1. Resolves `fc-init` (release asset, `go install`, or bundled fallback build).
-2. Iterates over `tenants/*/*.yaml`.
-3. Reads `source_image` and optional `rootfs_size_mb` from each tenant file.
-4. Builds `<tenant>-<service>-rootfs.ext4` via `scripts/docker-to-rootfs.sh`.
-5. Applies config overlays with precedence:
-   - `configs/<tenant>-<service>/` (tenant-specific)
-   - then `configs/<service>/` (shared)
-6. Uploads resulting `*-rootfs.ext4` artifacts to S3.
+On pull requests, CI runs `make build` only. On pushes to `main`, CI runs both
+`make build` and `make push`.
+
+1. `make build` calls `scripts/build-images.sh`.
+2. `scripts/build-images.sh` resolves `fc-init` (release asset, `go install`,
+   or bundled fallback build).
+3. `scripts/build-images.sh` iterates over `tenants/*/*.yaml`.
+4. `scripts/build-images.sh` reads `source_image` and optional `rootfs_size_mb`
+   from each tenant file.
+5. `scripts/build-images.sh` creates `<tenant>-<service>-rootfs.ext4` via
+   `scripts/docker-to-rootfs.sh`.
+6. `scripts/build-images.sh` applies config overlays in order (shared baseline
+   first, tenant-specific on top):
+   - `configs/<service>/` (shared baseline, applied first if present)
+   - `configs/<tenant>-<service>/` (tenant-specific, applied on top if present, overrides shared)
+7. `make push` calls `scripts/push-images.sh` to upload resulting
+   `*-rootfs.ext4` artifacts to S3.

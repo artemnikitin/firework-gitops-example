@@ -7,6 +7,15 @@ on:
       - "tenants/**"
       - "configs/**"
       - "scripts/**"
+      - "Makefile"
+      - ".github/workflows/build-images.yaml"
+  pull_request:
+    paths:
+      - "tenants/**"
+      - "configs/**"
+      - "scripts/**"
+      - "Makefile"
+      - ".github/workflows/build-images.yaml"
 
 jobs:
   build:
@@ -30,82 +39,17 @@ jobs:
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_arm64
           sudo chmod +x /usr/local/bin/yq
 
-      - name: Resolve fc-init
+      - name: Build per-tenant rootfs images
         env:
           FC_INIT_VERSION: ${{ vars.FC_INIT_VERSION }}
           FIREWORK_GITHUB_TOKEN: ${{ secrets.FIREWORK_GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          mkdir -p .cache/bin
-
-          if [ -n "${FC_INIT_VERSION:-}" ]; then
-            tag="${FC_INIT_VERSION#v}"
-            tag="v${tag}"
-            url="https://github.com/artemnikitin/firework/releases/download/${tag}/fc-init-linux-arm64"
-            echo "Downloading fc-init from release ${tag}"
-            curl -fsSL "$url" -o .cache/bin/fc-init
-            chmod +x .cache/bin/fc-init
-          else
-            echo "FC_INIT_VERSION not set; building fc-init from firework@main"
-            if [ -n "${FIREWORK_GITHUB_TOKEN:-}" ]; then
-              git config --global url."https://x-access-token:${FIREWORK_GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
-              export GOPRIVATE=github.com/artemnikitin/*
-            fi
-
-            if ! GOBIN="$PWD/.cache/bin" GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
-              go install github.com/artemnikitin/firework/cmd/fc-init@main; then
-              echo "::warning::Failed to build fc-init from firework@main. Falling back to bundled source."
-              GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
-                go build -ldflags "-s -w" -o .cache/bin/fc-init ./scripts/fc-init/main.go
-            fi
-          fi
-
-      - name: Build per-tenant rootfs images
-        run: |
-          chmod +x scripts/docker-to-rootfs.sh
-
-          for tenant_dir in tenants/*/; do
-            [ -d "$tenant_dir" ] || continue
-            tenant_id="$(basename "$tenant_dir")"
-            echo "::group::Tenant: $tenant_id"
-
-            for svc_file in "${tenant_dir}"*.yaml "${tenant_dir}"*.yml; do
-              [ -f "$svc_file" ] || continue
-              base_name="$(basename "${svc_file%.*}")"   # e.g. "kibana"
-
-              source_image="$(yq '.source_image // ""' "$svc_file")"
-              if [ -z "$source_image" ]; then
-                echo "Skipping ${tenant_id}-${base_name} — no source_image"
-                continue
-              fi
-
-              size_mb="$(yq '.rootfs_size_mb // 512' "$svc_file")"
-              output="${tenant_id}-${base_name}-rootfs.ext4"
-
-              # Config overlay: tenant-specific overlay takes precedence.
-              overlay_arg=""
-              if [ -d "configs/${tenant_id}-${base_name}" ]; then
-                overlay_arg="configs/${tenant_id}-${base_name}"
-              elif [ -d "configs/${base_name}" ]; then
-                overlay_arg="configs/${base_name}"
-              fi
-
-              echo "Building $output from $source_image"
-              ./scripts/docker-to-rootfs.sh "$source_image" "$output" "$size_mb" \
-                "${overlay_arg:-}" ".cache/bin/fc-init"
-            done
-            echo "::endgroup::"
-          done
+        run: make build
 
       - name: Upload images to S3
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ vars.AWS_REGION }}
           S3_IMAGES_BUCKET: ${{ vars.S3_IMAGES_BUCKET }}
-        run: |
-          for ext4 in *-rootfs.ext4; do
-            [ -f "$ext4" ] || continue
-            echo "Uploading $ext4 to s3://${S3_IMAGES_BUCKET}/${ext4}"
-            aws s3 cp "$ext4" "s3://${S3_IMAGES_BUCKET}/${ext4}"
-          done
+        run: make push

@@ -4,10 +4,11 @@
 #
 # Usage: ./scripts/docker-to-rootfs.sh <docker-image> <output.ext4> [size_mb] [overlay_dir] [fc_init_bin]
 #
-#   overlay_dir  Optional directory whose contents are copied into the rootfs,
-#                mirroring the guest filesystem layout. For example, placing a
-#                file at overlay_dir/usr/share/elasticsearch/config/elasticsearch.yml
-#                overwrites that path in the rootfs.
+#   overlay_dir  Optional colon-separated list of directories whose contents are
+#                copied into the rootfs in order, mirroring the guest filesystem
+#                layout. Later directories override earlier ones, so pass the shared
+#                baseline first and tenant-specific overlay second. For example:
+#                  configs/elasticsearch:configs/tenant-1-elasticsearch
 #   fc_init_bin  Optional path to a prebuilt linux/arm64 fc-init binary.
 #                If omitted, the script tries:
 #                  1) FC_INIT_BIN env var
@@ -164,10 +165,16 @@ RUNTIME_WRITABLE_PATHS_JSON="$(jq -cn \
   | unique
   ')"
 
-# Apply config overlay if provided.
-if [ -n "$OVERLAY_DIR" ] && [ -d "$OVERLAY_DIR" ]; then
-    echo "==> Applying config overlay from $OVERLAY_DIR"
-    cp -r "$OVERLAY_DIR/." "$ROOTFS/"
+# Apply config overlays in order. OVERLAY_DIR may be a colon-separated list;
+# later entries override earlier ones (shared baseline first, tenant-specific second).
+if [ -n "$OVERLAY_DIR" ]; then
+    IFS=: read -ra overlay_dirs <<< "$OVERLAY_DIR"
+    for dir in "${overlay_dirs[@]}"; do
+        [ -n "$dir" ] || continue
+        [ -d "$dir" ] || continue
+        echo "==> Applying config overlay from $dir"
+        cp -r "$dir/." "$ROOTFS/"
+    done
 fi
 
 # Some upstream images carry runtime-generated files that should not be baked
