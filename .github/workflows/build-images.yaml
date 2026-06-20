@@ -6,7 +6,38 @@ on:
   pull_request:
 
 jobs:
+  validate-config:
+    # Validate the GitOps runtime config with the exact Firework enricher before
+    # any expensive image build. Pin FIREWORK_CONFIG_REF to the core version
+    # deployed to the nodes; do not validate against a floating main.
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout GitOps config
+        uses: actions/checkout@v4
+
+      - name: Checkout Firework (pinned config contract)
+        uses: actions/checkout@v4
+        with:
+          repository: artemnikitin/firework
+          ref: ${{ vars.FIREWORK_CONFIG_REF }}
+          path: .firework
+          token: ${{ secrets.FIREWORK_GITHUB_TOKEN }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: .firework/go.mod
+
+      - name: Validate runtime config
+        working-directory: .firework
+        run: go run ./cmd/configcheck --require-remote-routing --input-dir "$GITHUB_WORKSPACE"
+
   build:
+    needs: validate-config
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -53,3 +84,37 @@ jobs:
           AWS_REGION: ${{ vars.AWS_REGION }}
           S3_IMAGES_BUCKET: ${{ vars.S3_IMAGES_BUCKET }}
         run: make push
+
+      - name: Save amd64 rootfs artifacts
+        if: matrix.target_platform == 'linux/amd64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rootfs-amd64
+          path: "*-rootfs.ext4"
+          if-no-files-found: error
+
+  upload-gcs:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: rootfs-amd64
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Upload images to GCS
+        env:
+          GCS_IMAGES_BUCKET: ${{ vars.GCS_IMAGES_BUCKET }}
+        run: make push-gcs

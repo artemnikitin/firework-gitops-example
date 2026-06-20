@@ -36,5 +36,5 @@ metadata:
   tenant: "tenant-3"
   tier: "premium"
   version: "8.17.10"
-  host: "es.artemnikitin.com"
+  subdomain: "es"
 
