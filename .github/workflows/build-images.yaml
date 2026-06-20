@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: artemnikitin/firework
-          ref: ${{ vars.FIREWORK_CONFIG_REF }}
+          ref: ${{ vars.FIREWORK_CONFIG_REF || 'be5c449ec546505cf03ca50a7118422a6139ee75' }}
           path: .firework
           token: ${{ secrets.FIREWORK_GITHUB_TOKEN || github.token }}
 
