@@ -23,7 +23,7 @@ jobs:
           repository: artemnikitin/firework
           ref: ${{ vars.FIREWORK_CONFIG_REF }}
           path: .firework
-          token: ${{ secrets.FIREWORK_GITHUB_TOKEN }}
+          token: ${{ secrets.FIREWORK_GITHUB_TOKEN || github.token }}
 
       - name: Setup Go
         uses: actions/setup-go@v5
