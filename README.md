@@ -2,7 +2,7 @@
 
 > This is an example deployment intended for demonstration and learning purposes only. It is not hardened, audited, etc.
 
-Example GitOps repository for [Firework](https://github.com/artemnikitin/firework), focused on building Firecracker-ready rootfs images and publishing ARM64 images to S3 and amd64 images to GCS.
+Example GitOps repository for [Firework](https://github.com/artemnikitin/firework), focused on building Firecracker-ready rootfs images and publishing both ARM64 and amd64 images to S3 and GCS via architecture-specific buckets.
 
 ## Related Repositories
 
@@ -24,11 +24,22 @@ The `build-images` workflow runs on every pull request and every push to `main`.
 It builds the tenant rootfs images twice, once for `linux/arm64` and once for
 `linux/amd64`.
 
+On pushes to `main`, each matrix build job publishes its architecture to the
+configured S3 bucket and, when configured, authenticates to GCP in the same job
+and uploads that architecture to its GCS bucket. Keep the buckets
+architecture-specific: the generated `*-rootfs.ext4` filenames are the same
+across architectures, so sharing one bucket would cause overwrites.
+
+Legacy variables keep their original meanings: `S3_IMAGES_BUCKET` is the arm64
+S3 bucket and `GCS_IMAGES_BUCKET` is the amd64 GCS bucket. Configure
+`S3_IMAGES_BUCKET_AMD64` and `GCS_IMAGES_BUCKET_ARM64` to enable the extra
+cross-backend uploads.
+
 ### CI config validation
 
 Before building images, the `validate-config` CI job runs Firework's
 `cmd/configcheck --require-remote-routing` against this repository's root, using
-the exact enricher of a pinned core version. 
+the exact enricher of a pinned core version.
 
 Local platform-specific builds:
 
