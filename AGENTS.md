@@ -2,7 +2,7 @@
 
 ## Project
 
-This is the example GitOps input repo for Firework. It defines tenant service YAML and config overlays used to build Firecracker-ready rootfs images and publish them to S3.
+This is the example GitOps input repo for Firework. It defines tenant service YAML and config overlays used to build Firecracker-ready rootfs images and publish them (ARM64 to S3, amd64 to GCS). Public routing is provider-neutral via `metadata.subdomain`; there is no provider-specific runtime config tree.
 
 ## Layout
 

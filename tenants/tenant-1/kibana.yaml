@@ -26,4 +26,4 @@ metadata:
   tenant: "tenant-1"
   tier: "standard"
   version: "8.19.11"
-  host: "tenant-1.artemnikitin.com"
+  subdomain: "tenant-1"
