@@ -2,7 +2,7 @@
 
 ## Project
 
-This is the example GitOps input repo for Firework. It defines tenant service YAML and config overlays used to build Firecracker-ready rootfs images and publish them (ARM64 to S3, amd64 to GCS). Public routing is provider-neutral via `metadata.subdomain`; there is no provider-specific runtime config tree.
+This is the example GitOps input repo for Firework. It defines tenant service YAML and config overlays used to build Firecracker-ready rootfs images and publish both ARM64 and amd64 artifacts to S3 and GCS via architecture-specific buckets. Public routing is provider-neutral via `metadata.subdomain`; there is no provider-specific runtime config tree.
 
 ## Layout
 
@@ -12,7 +12,7 @@ This is the example GitOps input repo for Firework. It defines tenant service YA
 - `configs/<service>/` and `configs/<tenant>-<service>/`: rootfs overlays; tenant-specific overlays take precedence.
 - `scripts/build-images.sh`: resolves `fc-init` and builds all tenant rootfs images.
 - `scripts/docker-to-rootfs.sh`: converts Docker images into ext4 rootfs images.
-- `scripts/push-images.sh`: uploads generated rootfs images to S3.
+- `scripts/push-images.sh`: uploads generated rootfs images to the selected object store bucket.
 - `scripts/fc-init/`: fallback bundled `fc-init` source for CI.
 
 ## Conventions

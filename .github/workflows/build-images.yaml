@@ -38,14 +38,17 @@ jobs:
     needs: validate-config
     permissions:
       contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
         include:
           - target_platform: linux/arm64
+            target_arch: arm64
             runner: ubuntu-24.04-arm
             yq_arch: arm64
           - target_platform: linux/amd64
+            target_arch: amd64
             runner: ubuntu-24.04
             yq_arch: amd64
 
@@ -76,38 +79,48 @@ jobs:
           FIREWORK_GITHUB_TOKEN: ${{ secrets.FIREWORK_GITHUB_TOKEN }}
         run: make build
 
+      - name: Resolve upload buckets
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          S3_IMAGES_BUCKET: ${{ vars.S3_IMAGES_BUCKET }}
+          S3_IMAGES_BUCKET_ARM64: ${{ vars.S3_IMAGES_BUCKET_ARM64 }}
+          S3_IMAGES_BUCKET_AMD64: ${{ vars.S3_IMAGES_BUCKET_AMD64 }}
+          GCS_IMAGES_BUCKET: ${{ vars.GCS_IMAGES_BUCKET }}
+          GCS_IMAGES_BUCKET_ARM64: ${{ vars.GCS_IMAGES_BUCKET_ARM64 }}
+          GCS_IMAGES_BUCKET_AMD64: ${{ vars.GCS_IMAGES_BUCKET_AMD64 }}
+        run: |
+          case "${{ matrix.target_arch }}" in
+            arm64)
+              echo "S3_IMAGES_BUCKET=${S3_IMAGES_BUCKET_ARM64:-${S3_IMAGES_BUCKET:-}}" >> "$GITHUB_ENV"
+              echo "GCS_IMAGES_BUCKET=${GCS_IMAGES_BUCKET_ARM64:-}" >> "$GITHUB_ENV"
+              ;;
+            amd64)
+              echo "S3_IMAGES_BUCKET=${S3_IMAGES_BUCKET_AMD64:-}" >> "$GITHUB_ENV"
+              echo "GCS_IMAGES_BUCKET=${GCS_IMAGES_BUCKET_AMD64:-${GCS_IMAGES_BUCKET:-}}" >> "$GITHUB_ENV"
+              ;;
+          esac
+
       - name: Upload images to S3
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.target_platform == 'linux/arm64'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ vars.AWS_REGION }}
-          S3_IMAGES_BUCKET: ${{ vars.S3_IMAGES_BUCKET }}
-        run: make push
-
-      - name: Save amd64 rootfs artifacts
-        if: matrix.target_platform == 'linux/amd64'
-        uses: actions/upload-artifact@v4
-        with:
-          name: rootfs-amd64
-          path: "*-rootfs.ext4"
-          if-no-files-found: error
-
-  upload-gcs:
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: rootfs-amd64
+        run: |
+          if [ -z "${S3_IMAGES_BUCKET:-}" ]; then
+            echo "Skipping S3 upload for ${{ matrix.target_platform }}; no bucket configured"
+            exit 0
+          fi
+          make push-s3
 
       - name: Authenticate to GCP
+        if: >-
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main' &&
+          (
+            (matrix.target_arch == 'arm64' && vars.GCS_IMAGES_BUCKET_ARM64 != '') ||
+            (matrix.target_arch == 'amd64' && (vars.GCS_IMAGES_BUCKET_AMD64 != '' || vars.GCS_IMAGES_BUCKET != ''))
+          )
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
@@ -115,6 +128,10 @@ jobs:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Upload images to GCS
-        env:
-          GCS_IMAGES_BUCKET: ${{ vars.GCS_IMAGES_BUCKET }}
-        run: make push-gcs
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if [ -z "${GCS_IMAGES_BUCKET:-}" ]; then
+            echo "Skipping GCS upload for ${{ matrix.target_platform }}; no bucket configured"
+            exit 0
+          fi
+          make push-gcs
