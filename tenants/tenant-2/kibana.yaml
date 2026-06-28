@@ -9,7 +9,7 @@ network: true
 cross_node_links:
   - service: "elasticsearch"
     env: "ELASTICSEARCH_HOSTS"
-    port: 9200
+    host_port: 9200
 port_forwards:
   - host_port: 5612
     vm_port: 5601
