@@ -10,6 +10,7 @@ cross_node_links:
   - service: "elasticsearch"
     env: "ELASTICSEARCH_HOSTS"
     host_port: 9200
+    protocol: "http"
 port_forwards:
   - host_port: 5612
     vm_port: 5601
