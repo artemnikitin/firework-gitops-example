@@ -6,7 +6,7 @@ vcpus: 2
 memory_mb: 4096
 kernel_args: "console=ttyS0 reboot=k panic=1 pci=off init=/sbin/fc-init /bin/tini -- /usr/local/bin/kibana-docker"
 network: true
-links:
+cross_node_links:
   - service: "elasticsearch"
     env: "ELASTICSEARCH_HOSTS"
     port: 9200
