@@ -1,9 +1,0 @@
-# Elasticsearch configuration — tenant-2.
-# This file is overlaid into the rootfs at build time by docker-to-rootfs.sh.
-
-cluster.name: "firework-tenant-2"
-node.name: "es-tenant-2"
-
-network.host: 0.0.0.0
-discovery.type: single-node
-xpack.security.enabled: false
