@@ -6,6 +6,9 @@ vcpus: 2
 memory_mb: 4096
 kernel_args: "console=ttyS0 reboot=k panic=1 pci=off init=/sbin/fc-init /bin/tini -- /usr/local/bin/docker-entrypoint.sh eswrapper"
 network: true
+port_forwards:
+  - host_port: 9200
+    vm_port: 9200
 health_check:
   type: "http"
   port: 9200
