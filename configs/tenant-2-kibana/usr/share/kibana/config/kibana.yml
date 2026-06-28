@@ -1,0 +1,6 @@
+# Tenant-2 Kibana overlay — overrides the shared kibana config.
+# cross_node_links injects bare host:port (no scheme); prepend http:// here.
+server.host: "0.0.0.0"
+server.name: "kibana"
+
+elasticsearch.hosts: ["http://${ELASTICSEARCH_HOSTS}"]
