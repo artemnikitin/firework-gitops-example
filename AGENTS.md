@@ -10,7 +10,7 @@ This is the example GitOps input repo for Firework. It defines tenant service YA
 - `Makefile`: image pipeline entrypoints used by CI (`build` and `push`).
 - `tenants/<tenant>/<service>.yaml`: tenant service specs.
 - `configs/<service>/` and `configs/<tenant>-<service>/`: rootfs overlays; tenant-specific overlays take precedence.
-- `scripts/build-images.sh`: resolves `fc-init` and builds all tenant rootfs images.
+- `scripts/build-images.sh`: resolves `fc-init` and builds tenant rootfs images. Skips a tenant service when its inputs (own YAML, shared/tenant overlays) are unchanged since `COMPARE_BASE_SHA`, unless `FORCE_REBUILD=true` or a shared pipeline file changed (see workflow for how these are set in CI).
 - `scripts/docker-to-rootfs.sh`: converts Docker images into ext4 rootfs images.
 - `scripts/push-images.sh`: uploads generated rootfs images to the selected object store bucket.
 - `scripts/fc-init/`: fallback bundled `fc-init` source for CI.
