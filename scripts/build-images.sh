@@ -129,6 +129,33 @@ resolve_fc_init() {
     fi
 }
 
+GLOBAL_PIPELINE_PATHS=(
+    "scripts/docker-to-rootfs.sh"
+    "scripts/build-images.sh"
+    "scripts/fc-init"
+    "Makefile"
+    ".github/workflows/build-images.yaml"
+)
+
+# A usable comparison SHA lets us skip per-service builds when nothing
+# relevant changed. Any failure here (no git repo, bad/missing SHA, forced
+# rebuild) must fall back to building everything - that's today's behavior
+# and is always correct, just not optimized.
+diff_base_usable() {
+    [ "${FORCE_REBUILD:-false}" != "true" ] || return 1
+    [ -n "${COMPARE_BASE_SHA:-}" ] || return 1
+    git rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
+    git cat-file -e "${COMPARE_BASE_SHA}^{commit}" 2>/dev/null || return 1
+    return 0
+}
+
+# Returns success (0) when it is safe to consider skipping unchanged
+# per-service builds, i.e. none of the shared pipeline inputs changed.
+skip_eligible() {
+    diff_base_usable || return 1
+    git diff --quiet "$COMPARE_BASE_SHA" -- "${GLOBAL_PIPELINE_PATHS[@]}" 2>/dev/null
+}
+
 overlay_arg_for() {
     local tenant_id="$1"
     local base_name="$2"
@@ -190,6 +217,18 @@ build_images() {
             local base_name
             base_name="$(basename "${svc_file%.*}")"
 
+            if [ "$SKIP_ELIGIBLE" = "true" ]; then
+                # Always pass both overlay paths, even if absent on disk right now:
+                # a deleted overlay dir must still show up in the diff, or its
+                # removal would be invisible to the skip check.
+                local svc_paths=("$svc_file" "configs/${base_name}" "configs/${tenant_id}-${base_name}")
+
+                if git diff --quiet "$COMPARE_BASE_SHA" -- "${svc_paths[@]}" 2>/dev/null; then
+                    echo "Skipping ${tenant_id}-${base_name} ($platform) - no changes since $COMPARE_BASE_SHA"
+                    continue
+                fi
+            fi
+
             local source_image
             source_image="$(yaml_value "$svc_file" source_image "")"
             if [ -z "$source_image" ]; then
@@ -219,4 +258,12 @@ configure_tool_paths
 TARGET_ARCH="$(platform_arch "$TARGET_PLATFORM")"
 FC_INIT_BIN_FOR_PLATFORM="${FC_INIT_BIN_INPUT:-$CACHE_BIN_DIR/fc-init-linux-$TARGET_ARCH}"
 resolve_fc_init "$TARGET_PLATFORM" "$FC_INIT_BIN_FOR_PLATFORM"
+
+SKIP_ELIGIBLE=false
+if skip_eligible; then
+    SKIP_ELIGIBLE=true
+elif diff_base_usable; then
+    echo "Shared pipeline inputs changed since $COMPARE_BASE_SHA; building every image."
+fi
+
 build_images "$TARGET_PLATFORM" "$FC_INIT_BIN_FOR_PLATFORM"
