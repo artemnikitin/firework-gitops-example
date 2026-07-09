@@ -7,6 +7,7 @@ This is the example GitOps input repo for Firework. It defines tenant service YA
 ## Layout
 
 - `defaults.yaml`: global service defaults consumed by Firework enricher; changes here affect every service on the next enricher run.
+- `docs/ci-pipeline.md`: CI trigger/incremental-build/publishing details for the image pipeline.
 - `Makefile`: image pipeline entrypoints used by CI (`build` and `push`).
 - `tenants/<tenant>/<service>.yaml`: tenant service specs.
 - `configs/<service>/` and `configs/<tenant>-<service>/`: rootfs overlays; tenant-specific overlays take precedence.
