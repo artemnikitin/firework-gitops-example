@@ -218,9 +218,10 @@ build_images() {
             base_name="$(basename "${svc_file%.*}")"
 
             if [ "$SKIP_ELIGIBLE" = "true" ]; then
-                local svc_paths=("$svc_file")
-                [ -d "configs/${base_name}" ] && svc_paths+=("configs/${base_name}")
-                [ -d "configs/${tenant_id}-${base_name}" ] && svc_paths+=("configs/${tenant_id}-${base_name}")
+                # Always pass both overlay paths, even if absent on disk right now:
+                # a deleted overlay dir must still show up in the diff, or its
+                # removal would be invisible to the skip check.
+                local svc_paths=("$svc_file" "configs/${base_name}" "configs/${tenant_id}-${base_name}")
 
                 if git diff --quiet "$COMPARE_BASE_SHA" -- "${svc_paths[@]}" 2>/dev/null; then
                     echo "Skipping ${tenant_id}-${base_name} ($platform) - no changes since $COMPARE_BASE_SHA"
