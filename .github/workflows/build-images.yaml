@@ -72,7 +72,7 @@ jobs:
       - name: Determine build inputs
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BASE_REF: ${{ github.base_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           BEFORE_SHA: ${{ github.event.before }}
           FORCE_REBUILD_INPUT: ${{ github.event.inputs.force_rebuild }}
         run: |
@@ -87,10 +87,21 @@ jobs:
               ;;
             workflow_dispatch)
               FORCE_REBUILD="${FORCE_REBUILD_INPUT:-true}"
+              if [ "$FORCE_REBUILD" != "true" ]; then
+                # No natural "since last build" SHA exists for a manual run;
+                # use the dispatched commit's parent so unchecking force_rebuild
+                # actually engages change detection instead of being a no-op.
+                if PARENT_SHA="$(git rev-parse "HEAD^" 2>/dev/null)"; then
+                  COMPARE_BASE_SHA="$PARENT_SHA"
+                fi
+              fi
               ;;
             pull_request)
-              if git fetch --no-tags origin "$BASE_REF" && \
-                 BASE_SHA="$(git merge-base HEAD "origin/$BASE_REF" 2>/dev/null)"; then
+              # Use the base SHA from the event payload directly instead of
+              # `git fetch` + `merge-base`: it needs no remote-tracking ref to
+              # exist locally, so it can't silently fail if actions/checkout's
+              # fetch refspec doesn't populate origin/<base>.
+              if [ -n "$BASE_SHA" ] && git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
                 COMPARE_BASE_SHA="$BASE_SHA"
               fi
               ;;
