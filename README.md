@@ -2,7 +2,7 @@
 
 > This is an example deployment intended for demonstration and learning purposes only. It is not hardened, audited, etc.
 
-Example GitOps repository for [Firework](https://github.com/artemnikitin/firework), focused on building Firecracker-ready rootfs images and publishing both ARM64 and amd64 images to S3 and GCS via architecture-specific buckets.
+Example GitOps repository for [Firework](https://github.com/artemnikitin/firework), focused on building Firecracker-ready rootfs images and publishing both ARM64 and X86 images to S3 and GCS via architecture-specific buckets.
 
 ## Related Repositories
 
