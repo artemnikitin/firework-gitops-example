@@ -1,8 +1,10 @@
-# Tenant-3 Elasticsearch data node 2 — premium tier, 2-node cluster
-# Anti-affinity ensures this node is placed on a different EC2 instance than data-1.
-# The enricher injects discovery.seed_hosts with the peer node's transport address,
-# which ES 8.x reads natively without extra wiring.
-source_image: "docker.elastic.co/elasticsearch/elasticsearch:8.17.10"
+# Tenant-3 Elasticsearch data node 2 — premium tier, 3-node cluster.
+# The discovery links form a ring: data-1 → data-2 → voting-only → data-1.
+# Anti-affinity prefers placing the three Elasticsearch services on different
+# Firework hosts.
+# The enricher injects discovery.seed_hosts with the peer node's transport
+# address, which Elasticsearch 8.19 reads natively without extra wiring.
+source_image: "docker.elastic.co/elasticsearch/elasticsearch:8.19.11"
 rootfs_size_mb: 4096
 node_type: "backend"
 vcpus: 4
@@ -23,16 +25,18 @@ health_check:
   retries: 3
 node_host_ip_env: "transport.publish_host"
 cross_node_links:
-  - service: "elasticsearch-data-1"
+  - service: "elasticsearch-voting-only"
     env: "discovery.seed_hosts"
-    host_port: 19300
+    host_port: 19301
 env:
   cluster.name: "tenant-3"
   node.name: "es-data-2"
-  cluster.initial_master_nodes: "es-data-1,es-data-2"
+  # Bootstrap-only: remove this setting from all three services after the
+  # cluster forms. It must not be used on normal restarts or replacements.
+  cluster.initial_master_nodes: "es-data-1,es-data-2,es-voting-only"
   xpack.security.enabled: "false"
   transport.publish_port: "19300"
 metadata:
   tenant: "tenant-3"
   tier: "premium"
-  version: "8.17.10"
+  version: "8.19.11"
