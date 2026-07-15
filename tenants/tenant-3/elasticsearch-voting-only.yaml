@@ -2,12 +2,15 @@
 # This node participates in master elections but stores no shard data and can
 # never become the elected master. Anti-affinity prefers a separate Firework
 # host; three separate hosts are required to tolerate any single host failure.
+# Each node seeds both peers: the controller joins cross_node_links sharing an
+# env key into one comma-separated discovery.seed_hosts value, which
+# Elasticsearch 8.19 reads natively. On a controller without multi-address
+# link support the last resolved link wins, degrading to a single seed.
 source_image: "docker.elastic.co/elasticsearch/elasticsearch:8.19.11"
 rootfs_size_mb: 2048
 node_type: "backend"
 vcpus: 1
 memory_mb: 2048
-kernel_args: "console=ttyS0 reboot=k panic=1 pci=off init=/sbin/fc-init /bin/tini -- /usr/local/bin/docker-entrypoint.sh eswrapper"
 network: true
 anti_affinity_group: "es-tenant-3"
 port_forwards:
@@ -22,6 +25,9 @@ health_check:
 node_host_ip_env: "transport.publish_host"
 cross_node_links:
   - service: "elasticsearch-data-1"
+    env: "discovery.seed_hosts"
+    host_port: 19300
+  - service: "elasticsearch-data-2"
     env: "discovery.seed_hosts"
     host_port: 19300
 env:
