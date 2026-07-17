@@ -1,21 +1,20 @@
-# Tenant-3 Elasticsearch data node 1 — premium tier, 3-node cluster.
-# The third node is a dedicated voting-only tiebreaker. Anti-affinity prefers
-# placing the three Elasticsearch services on different Firework hosts.
+# Tenant-3 Elasticsearch dedicated voting-only tiebreaker.
+# This node participates in master elections but stores no shard data and can
+# never become the elected master. Anti-affinity prefers a separate Firework
+# host; three separate hosts are required to tolerate any single host failure.
 # Each node seeds both peers: the controller joins cross_node_links sharing an
 # env key into one comma-separated discovery.seed_hosts value, which
 # Elasticsearch 8.19 reads natively. On a controller without multi-address
 # link support the last resolved link wins, degrading to a single seed.
 source_image: "docker.elastic.co/elasticsearch/elasticsearch:8.19.11"
-rootfs_size_mb: 4096
+rootfs_size_mb: 2048
 node_type: "backend"
-vcpus: 4
-memory_mb: 4096
+vcpus: 1
+memory_mb: 2048
 network: true
 anti_affinity_group: "es-tenant-3"
 port_forwards:
-  - host_port: 19200
-    vm_port: 9200
-  - host_port: 19300
+  - host_port: 19301
     vm_port: 9300
 health_check:
   type: "tcp"
@@ -25,22 +24,23 @@ health_check:
   retries: 3
 node_host_ip_env: "transport.publish_host"
 cross_node_links:
+  - service: "elasticsearch-data-1"
+    env: "discovery.seed_hosts"
+    host_port: 19300
   - service: "elasticsearch-data-2"
     env: "discovery.seed_hosts"
     host_port: 19300
-  - service: "elasticsearch-voting-only"
-    env: "discovery.seed_hosts"
-    host_port: 19301
 env:
   cluster.name: "tenant-3"
-  node.name: "es-data-1"
+  node.name: "es-voting-only"
+  node.roles: "master,voting_only"
   # Bootstrap-only: remove this setting from all three services after the
   # cluster forms. It must not be used on normal restarts or replacements.
   cluster.initial_master_nodes: "es-data-1,es-data-2,es-voting-only"
   xpack.security.enabled: "false"
-  transport.publish_port: "19300"
+  transport.publish_port: "19301"
 metadata:
   tenant: "tenant-3"
   tier: "premium"
+  role: "voting_only"
   version: "8.19.11"
-  subdomain: "es"
