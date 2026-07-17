@@ -11,6 +11,12 @@ rootfs_size_mb: 2048
 node_type: "backend"
 vcpus: 1
 memory_mb: 2048
+# Required: boots the image ENTRYPOINT directly via fc-init. Elasticsearch
+# settings are injected as env vars with dots in their names (cluster.name,
+# discovery.seed_hosts, ...), and those do not survive the generated
+# /sbin/init shell wrapper -- the shell drops env vars whose names are not
+# valid identifiers. Do not remove as "redundant".
+kernel_args: "console=ttyS0 reboot=k panic=1 pci=off init=/sbin/fc-init /bin/tini -- /usr/local/bin/docker-entrypoint.sh eswrapper"
 network: true
 anti_affinity_group: "es-tenant-3"
 port_forwards:
