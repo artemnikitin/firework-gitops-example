@@ -25,9 +25,12 @@ port_forwards:
 health_check:
   type: "tcp"
   port: 9300
-  interval: "20s"
+  # First boot on 1 vCPU takes longer than a 20s x 3 (~60s) failure budget,
+  # so the agent kept restarting the VM before the transport port opened.
+  # Match the ~150s budget that tenant-2 kibana needed for slow cold starts.
+  interval: "30s"
   timeout: "5s"
-  retries: 3
+  retries: 5
 node_host_ip_env: "transport.publish_host"
 cross_node_links:
   - service: "elasticsearch-data-1"
