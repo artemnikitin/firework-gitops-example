@@ -4,6 +4,11 @@ rootfs_size_mb: 2048
 node_type: "backend"
 vcpus: 2
 memory_mb: 4096
+# Keep Kibana and Elasticsearch on different Firework hosts. When co-located,
+# the cross_node_link resolves to the node's own host IP, and a guest cannot
+# reach its own host's forwarded port (hairpin NAT gap, firework issue #27) --
+# Kibana then loops at 503 until the health check restarts it, forever.
+anti_affinity_group: "tenant-2"
 kernel_args: "console=ttyS0 reboot=k panic=1 pci=off init=/sbin/fc-init /bin/tini -- /usr/local/bin/docker-entrypoint.sh eswrapper"
 network: true
 port_forwards:
