@@ -18,7 +18,10 @@ health_check:
   type: "http"
   port: 5601
   path: "/api/status"
-  interval: "15s"
+  # Kibana 9.3 needs ~2 minutes to become ready in a 2-vCPU microVM; the
+  # previous 15s x 5 window restarted the VM before first readiness, looping
+  # forever. Keep the failure budget above the observed cold-start time.
+  interval: "30s"
   timeout: "5s"
   retries: 5
 env:
