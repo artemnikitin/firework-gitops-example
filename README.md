@@ -18,6 +18,11 @@ Service/config semantics are documented in the main `firework` repository:
 
 This repository intentionally keeps only high-level pipeline guidance.
 
+Persistent-volume defaults are present in `defaults.yaml`. The opt-in
+`examples/storage-validation.yaml` workload is kept outside `tenants/` so
+storage-disabled deployments continue to work; copy it into a tenant only
+after the node storage pool is mounted and configured.
+
 ## CI Pipeline
 
 CI builds and publishes these images automatically on every push to `main`
