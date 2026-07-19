@@ -120,13 +120,9 @@ resolve_fc_init() {
         return
     fi
 
-    echo "FC_INIT_VERSION not set; building fc-init for ${platform} from firework@main"
-
-    if ! install_fc_init_from_ref "main" "$goarch" "$output"; then
-        echo "::warning::Failed to build fc-init from firework@main. Falling back to bundled source."
-        GOOS=linux GOARCH="$goarch" CGO_ENABLED=0 \
-            go build -ldflags "-s -w" -o "$output" ./scripts/fc-init/main.go
-    fi
+    echo "FC_INIT_VERSION not set; building bundled fc-init for ${platform}"
+    GOOS=linux GOARCH="$goarch" CGO_ENABLED=0 \
+        go build -ldflags "-s -w" -o "$output" ./scripts/fc-init/main.go
 }
 
 GLOBAL_PIPELINE_PATHS=(

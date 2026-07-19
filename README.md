@@ -18,6 +18,12 @@ Service/config semantics are documented in the main `firework` repository:
 
 This repository intentionally keeps only high-level pipeline guidance.
 
+Persistent-volume defaults are present in `defaults.yaml`.
+`tenants/tenant-1/elasticsearch.yaml` mounts its data directory from a local
+persistent volume. Tenant-1 Kibana and all tenant-2 and tenant-3 services
+remain stateless. Enable and verify the local storage pool on every AWS and
+GCP node before merging this configuration.
+
 ## CI Pipeline
 
 CI builds and publishes these images automatically on every push to `main`
