@@ -18,10 +18,10 @@ Service/config semantics are documented in the main `firework` repository:
 
 This repository intentionally keeps only high-level pipeline guidance.
 
-Persistent-volume defaults are present in `defaults.yaml`. The opt-in
-`examples/storage-validation.yaml` workload is kept outside `tenants/` so
-storage-disabled deployments continue to work; copy it into a tenant only
-after the node storage pool is mounted and configured.
+Persistent-volume defaults are present in `defaults.yaml`.
+`tenants/tenant-1/storage-validation.yaml` deploys a small local-volume smoke
+workload when this configuration reaches `main`. Enable and verify the local
+storage pool on every AWS and GCP node before merging this configuration.
 
 ## CI Pipeline
 

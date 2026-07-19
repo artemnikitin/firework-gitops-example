@@ -23,10 +23,9 @@ change to any shared pipeline input (`scripts/docker-to-rootfs.sh`,
 file itself) forces a full rebuild of every service, since those affect every
 image.
 
-This can't detect two kinds of change: a mutable `source_image` tag being
-re-pushed upstream, and a bump to the `FC_INIT_VERSION` repo variable (no
-associated file diff). Both are covered by the weekly scheduled run, which
-always does a full rebuild and upload. You can also trigger a full
+This cannot detect a mutable `source_image` tag being re-pushed upstream. The
+weekly scheduled run therefore always does a full rebuild and upload. You can
+also trigger a full
 rebuild+upload immediately via `workflow_dispatch` (`force_rebuild` input,
 defaults to `true`) — do this once after merging a change to this
 change-detection logic, and any time the buckets need to be forced back in
@@ -47,4 +46,11 @@ cross-backend uploads.
 
 Before building images, the `validate-config` CI job runs Firework's
 `cmd/configcheck --require-remote-routing` against this repository's root, using
-the exact enricher of a pinned core version.
+the exact enricher of the persistent-volume core revision pinned directly in
+the workflow. This keeps validation aligned with the control plane and agents
+used by this example without requiring a repository variable.
+
+CI image builds compile the bundled `scripts/fc-init/main.go`. This keeps the
+guest mount contract in the same GitOps change as the volume workload. Local
+builds may still set `FC_INIT_VERSION` explicitly to select a released
+Firework `fc-init` artifact.
