@@ -15,6 +15,13 @@ health_check:
   retries: 5
 env:
   TENANT_ID: "tenant-1"
+volumes:
+  # Elasticsearch's data path is separated from its immutable rootfs. The
+  # retained local volume stays bound to its first Firework node.
+  - name: "data"
+    type: "local"
+    mount_path: "/usr/share/elasticsearch/data"
+    size: "20Gi"
 metadata:
   tenant: "tenant-1"
   tier: "standard"
