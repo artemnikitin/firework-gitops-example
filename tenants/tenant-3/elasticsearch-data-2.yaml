@@ -26,9 +26,12 @@ port_forwards:
 health_check:
   type: "tcp"
   port: 9300
-  interval: "20s"
+  # A cold Elasticsearch boot can outlast a 20s x 3 (~60s) failure budget,
+  # which restarts the VM just before the transport port opens. Keep the
+  # ~150s+ budget consistent across all three tenant-3 services.
+  interval: "30s"
   timeout: "5s"
-  retries: 3
+  retries: 5
 node_host_ip_env: "transport.publish_host"
 cross_node_links:
   - service: "elasticsearch-data-1"
