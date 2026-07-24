@@ -6,10 +6,11 @@ vcpus: 2
 memory_mb: 2048
 kernel_args: "console=ttyS0 reboot=k panic=1 pci=off init=/sbin/fc-init /bin/tini -- /usr/local/bin/kibana-docker"
 network: true
-links:
+cross_node_links:
   - service: "elasticsearch"
     env: "ELASTICSEARCH_HOSTS"
-    port: 9200
+    host_port: 9200
+    protocol: "http"
 port_forwards:
   - host_port: 5611
     vm_port: 5601
@@ -17,7 +18,9 @@ health_check:
   type: "http"
   port: 5601
   path: "/api/status"
-  interval: "15s"
+  # Keep the failure budget above Kibana's observed cold-start time so a
+  # healthy first boot is not recycled before it can answer readiness checks.
+  interval: "30s"
   timeout: "5s"
   retries: 5
 env:

@@ -94,7 +94,7 @@ resolve_fc_init_bin() {
     fi
 
     if command -v fc-init >/dev/null 2>&1; then
-        echo "$(command -v fc-init)"
+        command -v fc-init
         return
     fi
 
@@ -307,12 +307,14 @@ jq -n \
 # Install /sbin/fc-init compiled binary from the firework repo.
 echo "==> Installing /sbin/fc-init"
 mkdir -p "$ROOTFS/sbin"
+rm -f "$ROOTFS/sbin/fc-init"
 cp "$FC_INIT_BIN_PATH" "$ROOTFS/sbin/fc-init"
 chmod 755 "$ROOTFS/sbin/fc-init"
 
 # Generate /sbin/init wrapper from Docker metadata so services still boot
 # correctly when kernel args only specify "init=/sbin/fc-init".
 echo "==> Generating /sbin/init wrapper from Docker metadata"
+rm -f "$ROOTFS/sbin/init"
 cat > "$ROOTFS/sbin/init" <<INIT_EOF
 #!/bin/sh
 
