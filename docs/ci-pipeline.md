@@ -42,6 +42,22 @@ S3 bucket and `GCS_IMAGES_BUCKET` is the amd64 GCS bucket. Configure
 `S3_IMAGES_BUCKET_AMD64` and `GCS_IMAGES_BUCKET_ARM64` to enable the extra
 cross-backend uploads.
 
+**`S3_IMAGES_BUCKET_AMD64` is no longer optional for AWS deployments.** The AWS
+data plane in `firework-deployment-example` now defaults to x86_64 nodes using
+nested virtualization rather than bare-metal Graviton, so it consumes the amd64
+rootfs images. Host and guest architecture must match, and a mismatch fails at
+microVM start rather than at deploy time.
+
+Which bucket an AWS deployment should point `s3_images_bucket_id` at:
+
+| AWS `node_ami_architecture` | Images bucket |
+| --- | --- |
+| `x86_64` (default) | `S3_IMAGES_BUCKET_AMD64` |
+| `arm64` (bare-metal Graviton) | `S3_IMAGES_BUCKET` |
+
+The naming is historical: `S3_IMAGES_BUCKET` predates AWS having an x86_64
+option, so it still means "the arm64 S3 bucket" rather than "the default one".
+
 ## CI config validation
 
 Before building images, the `validate-config` CI job runs Firework's
