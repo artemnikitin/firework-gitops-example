@@ -182,7 +182,14 @@ jobs:
           echo "GCS_IMAGES_BUCKET=$GCS_TARGET" >> "$GITHUB_ENV"
 
       - name: Upload images to S3
-        if: env.SHOULD_UPLOAD == 'true'
+        # Gated the same way as the GCS credentials below, so the arm64 leg is
+        # not handed AWS credentials for an upload it will never perform.
+        if: >-
+          env.SHOULD_UPLOAD == 'true' &&
+          (
+            (matrix.target_arch == 'arm64' && vars.S3_IMAGES_BUCKET_ARM64 != '') ||
+            (matrix.target_arch == 'amd64' && (vars.S3_IMAGES_BUCKET_AMD64 != '' || vars.S3_IMAGES_BUCKET != ''))
+          )
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -208,7 +215,14 @@ jobs:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Upload images to GCS
-        if: env.SHOULD_UPLOAD == 'true'
+        # Matches the credentials step above; without this the arm64 leg runs an
+        # upload step that can only no-op, having never authenticated.
+        if: >-
+          env.SHOULD_UPLOAD == 'true' &&
+          (
+            (matrix.target_arch == 'arm64' && vars.GCS_IMAGES_BUCKET_ARM64 != '') ||
+            (matrix.target_arch == 'amd64' && (vars.GCS_IMAGES_BUCKET_AMD64 != '' || vars.GCS_IMAGES_BUCKET != ''))
+          )
         run: |
           if [ -z "${GCS_IMAGES_BUCKET:-}" ]; then
             echo "Skipping GCS upload for ${{ matrix.target_platform }}; no bucket configured"
