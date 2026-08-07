@@ -1,4 +1,4 @@
-TARGET_PLATFORM ?= linux/arm64
+TARGET_PLATFORM ?= linux/amd64
 
 .PHONY: build build-amd64 build-arm64 push push-s3 push-gcs
 

@@ -162,11 +162,11 @@ jobs:
         run: |
           case "${{ matrix.target_arch }}" in
             arm64)
-              echo "S3_IMAGES_BUCKET=${S3_IMAGES_BUCKET_ARM64:-${S3_IMAGES_BUCKET:-}}" >> "$GITHUB_ENV"
+              echo "S3_IMAGES_BUCKET=${S3_IMAGES_BUCKET_ARM64:-}" >> "$GITHUB_ENV"
               echo "GCS_IMAGES_BUCKET=${GCS_IMAGES_BUCKET_ARM64:-}" >> "$GITHUB_ENV"
               ;;
             amd64)
-              echo "S3_IMAGES_BUCKET=${S3_IMAGES_BUCKET_AMD64:-}" >> "$GITHUB_ENV"
+              echo "S3_IMAGES_BUCKET=${S3_IMAGES_BUCKET_AMD64:-${S3_IMAGES_BUCKET:-}}" >> "$GITHUB_ENV"
               echo "GCS_IMAGES_BUCKET=${GCS_IMAGES_BUCKET_AMD64:-${GCS_IMAGES_BUCKET:-}}" >> "$GITHUB_ENV"
               ;;
           esac

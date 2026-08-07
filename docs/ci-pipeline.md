@@ -37,26 +37,32 @@ before this feature existed.
 
 ## Bucket configuration
 
-Legacy variables keep their original meanings: `S3_IMAGES_BUCKET` is the arm64
-S3 bucket and `GCS_IMAGES_BUCKET` is the amd64 GCS bucket. Configure
-`S3_IMAGES_BUCKET_AMD64` and `GCS_IMAGES_BUCKET_ARM64` to enable the extra
-cross-backend uploads.
+Both legacy variables mean the amd64 bucket, because both providers default to
+x86_64 nodes: `S3_IMAGES_BUCKET` is the amd64 S3 bucket and `GCS_IMAGES_BUCKET`
+is the amd64 GCS bucket. The explicit `*_AMD64` names are still supported and
+take precedence when set. Publishing the arm64 build requires opting in with
+`S3_IMAGES_BUCKET_ARM64` or `GCS_IMAGES_BUCKET_ARM64`; without them the arm64
+build still runs but uploads nothing.
 
-**`S3_IMAGES_BUCKET_AMD64` is no longer optional for AWS deployments.** The AWS
-data plane in `firework-deployment-example` now defaults to x86_64 nodes using
-nested virtualization rather than bare-metal Graviton, so it consumes the amd64
-rootfs images. Host and guest architecture must match, and a mismatch fails at
-microVM start rather than at deploy time.
+Resolved upload targets per build:
 
-Which bucket an AWS deployment should point `s3_images_bucket_id` at:
+| Build | S3 bucket | GCS bucket |
+| --- | --- | --- |
+| amd64 | `S3_IMAGES_BUCKET_AMD64`, else `S3_IMAGES_BUCKET` | `GCS_IMAGES_BUCKET_AMD64`, else `GCS_IMAGES_BUCKET` |
+| arm64 | `S3_IMAGES_BUCKET_ARM64` | `GCS_IMAGES_BUCKET_ARM64` |
 
-| AWS `node_ami_architecture` | Images bucket |
-| --- | --- |
-| `x86_64` (default) | `S3_IMAGES_BUCKET_AMD64` |
-| `arm64` (bare-metal Graviton) | `S3_IMAGES_BUCKET` |
+Host and guest architecture must match, and a mismatch fails at microVM start
+rather than at deploy time. The AWS data plane in
+`firework-deployment-example` now defaults to x86_64 nodes using nested
+virtualization rather than bare-metal Graviton, so it consumes the amd64 rootfs
+images; the GCP data plane has always been x86_64.
 
-The naming is historical: `S3_IMAGES_BUCKET` predates AWS having an x86_64
-option, so it still means "the arm64 S3 bucket" rather than "the default one".
+`S3_IMAGES_BUCKET` previously meant the arm64 S3 bucket, so an existing
+deployment that keeps its value will now receive amd64 images in that same
+bucket, replacing the arm64 objects under identical names. That is intended for
+the default x86_64 AWS node. A deployment that still runs Graviton nodes
+(`node_ami_architecture = "arm64"`) must set `S3_IMAGES_BUCKET_ARM64` and point
+`s3_images_bucket_id` at that bucket instead.
 
 ## CI config validation
 

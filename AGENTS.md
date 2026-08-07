@@ -29,7 +29,7 @@ For YAML-only changes, inspect schema consistency against the main repo docs.
 For image pipeline changes, validate:
 
 - `shellcheck scripts/docker-to-rootfs.sh`
-- A targeted local rootfs build when Docker, `jq`, `mkfs.ext4`, and a linux/arm64 `fc-init` are available.
+- A targeted local rootfs build when Docker, `jq`, `mkfs.ext4`, and a linux/amd64 `fc-init` are available.
 
 For CI-equivalent validation, run `make build`, but skip `make push`.
 
