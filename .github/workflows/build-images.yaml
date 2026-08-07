@@ -162,14 +162,24 @@ jobs:
         run: |
           case "${{ matrix.target_arch }}" in
             arm64)
-              echo "S3_IMAGES_BUCKET=${S3_IMAGES_BUCKET_ARM64:-}" >> "$GITHUB_ENV"
-              echo "GCS_IMAGES_BUCKET=${GCS_IMAGES_BUCKET_ARM64:-}" >> "$GITHUB_ENV"
+              S3_TARGET="${S3_IMAGES_BUCKET_ARM64:-}"
+              GCS_TARGET="${GCS_IMAGES_BUCKET_ARM64:-}"
               ;;
             amd64)
-              echo "S3_IMAGES_BUCKET=${S3_IMAGES_BUCKET_AMD64:-${S3_IMAGES_BUCKET:-}}" >> "$GITHUB_ENV"
-              echo "GCS_IMAGES_BUCKET=${GCS_IMAGES_BUCKET_AMD64:-${GCS_IMAGES_BUCKET:-}}" >> "$GITHUB_ENV"
+              S3_TARGET="${S3_IMAGES_BUCKET_AMD64:-${S3_IMAGES_BUCKET:-}}"
+              GCS_TARGET="${GCS_IMAGES_BUCKET_AMD64:-${GCS_IMAGES_BUCKET:-}}"
               ;;
           esac
+
+          # Publishing an architecture nobody consumes is intentional and cheap;
+          # silently publishing nothing is how an architecture mismatch reaches
+          # a running deployment. Make the no-op loud.
+          if [ -z "$S3_TARGET" ] && [ -z "$GCS_TARGET" ]; then
+            echo "::warning title=No ${{ matrix.target_arch }} image bucket configured::The ${{ matrix.target_arch }} build will produce rootfs images and publish none of them. Set the ${{ matrix.target_arch }} bucket variables to publish it."
+          fi
+
+          echo "S3_IMAGES_BUCKET=$S3_TARGET" >> "$GITHUB_ENV"
+          echo "GCS_IMAGES_BUCKET=$GCS_TARGET" >> "$GITHUB_ENV"
 
       - name: Upload images to S3
         if: env.SHOULD_UPLOAD == 'true'

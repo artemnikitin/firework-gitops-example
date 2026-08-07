@@ -2,7 +2,7 @@
 
 ## Project
 
-This is the example GitOps input repo for Firework. It defines tenant service YAML and config overlays used to build Firecracker-ready rootfs images and publish both ARM64 and amd64 artifacts to S3 and GCS via architecture-specific buckets. Public routing is provider-neutral via `metadata.subdomain`; there is no provider-specific runtime config tree.
+This is the example GitOps input repo for Firework. It defines tenant service YAML and config overlays used to build Firecracker-ready rootfs images and publish them to S3 and GCS via architecture-specific buckets. Both amd64 and ARM64 are built; amd64 is the published default because both data planes run x86_64 nodes, and ARM64 publishing is opt-in via the `*_ARM64` bucket variables. Public routing is provider-neutral via `metadata.subdomain`; there is no provider-specific runtime config tree.
 
 ## Layout
 

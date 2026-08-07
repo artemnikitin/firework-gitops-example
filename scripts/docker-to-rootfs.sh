@@ -17,7 +17,7 @@
 #                  4) build from ../firework/cmd/fc-init (requires Go)
 #                  5) fc-init from PATH
 #   target_platform Optional Docker platform to export. Defaults to
-#                   TARGET_PLATFORM env var, then linux/arm64.
+#                   TARGET_PLATFORM env var, then linux/amd64.
 #
 # Requires: docker with buildx, mkfs.ext4 (e2fsprogs), jq
 #
@@ -29,7 +29,7 @@ OUTPUT="${2:?Usage: $0 <docker-image> <output.ext4> [size_mb] [overlay_dir] [fc_
 SIZE_MB="${3:-512}"
 OVERLAY_DIR="${4:-}"
 FC_INIT_BIN_INPUT="${5:-${FC_INIT_BIN:-}}"
-TARGET_PLATFORM="${6:-${TARGET_PLATFORM:-linux/arm64}}"
+TARGET_PLATFORM="${6:-${TARGET_PLATFORM:-linux/amd64}}"
 TARGET_ARCH="${TARGET_PLATFORM##*/}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
