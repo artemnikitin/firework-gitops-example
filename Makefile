@@ -15,7 +15,7 @@ push:
 	bash ./scripts/push-images.sh
 
 push-s3:
-	S3_IMAGES_BUCKET="$(S3_IMAGES_BUCKET)" bash ./scripts/push-images.sh
+	S3_IMAGES_BUCKET="$(S3_IMAGES_BUCKET)" bash ./scripts/push-images.sh s3
 
 push-gcs:
-	GCS_IMAGES_BUCKET="$(GCS_IMAGES_BUCKET)" bash ./scripts/push-images.sh
+	GCS_IMAGES_BUCKET="$(GCS_IMAGES_BUCKET)" bash ./scripts/push-images.sh gcs

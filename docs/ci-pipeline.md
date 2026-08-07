@@ -51,6 +51,13 @@ Resolved upload targets per build:
 | amd64 | `S3_IMAGES_BUCKET_AMD64`, else `S3_IMAGES_BUCKET` | `GCS_IMAGES_BUCKET_AMD64`, else `GCS_IMAGES_BUCKET` |
 | arm64 | `S3_IMAGES_BUCKET_ARM64` | `GCS_IMAGES_BUCKET_ARM64` |
 
+Both variables are exported for the amd64 build, so `push-images.sh` takes an
+explicit `s3` or `gcs` backend argument rather than inferring one from whichever
+bucket is set. `make push-s3` and `make push-gcs` pass it. Inference is still
+accepted when exactly one bucket variable is set, and errors when both are, so
+a publish can never silently go to the wrong object store.
+`scripts/test-push-images.sh` covers this and runs in CI.
+
 Host and guest architecture must match, and a mismatch fails at microVM start
 rather than at deploy time. The AWS data plane in
 `firework-deployment-example` now defaults to x86_64 nodes using nested

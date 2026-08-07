@@ -27,6 +27,9 @@ jobs:
       - name: Checkout GitOps config
         uses: actions/checkout@v4
 
+      - name: Check image push backend selection
+        run: bash ./scripts/test-push-images.sh
+
       - name: Checkout Firework (pinned config contract)
         uses: actions/checkout@v4
         with:

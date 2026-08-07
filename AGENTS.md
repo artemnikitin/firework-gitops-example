@@ -13,7 +13,8 @@ This is the example GitOps input repo for Firework. It defines tenant service YA
 - `configs/<service>/` and `configs/<tenant>-<service>/`: rootfs overlays; tenant-specific overlays take precedence.
 - `scripts/build-images.sh`: resolves `fc-init` and builds tenant rootfs images. Skips a tenant service when its inputs (own YAML, shared/tenant overlays) are unchanged since `COMPARE_BASE_SHA`, unless `FORCE_REBUILD=true` or a shared pipeline file changed (see workflow for how these are set in CI).
 - `scripts/docker-to-rootfs.sh`: converts Docker images into ext4 rootfs images.
-- `scripts/push-images.sh`: uploads generated rootfs images to the selected object store bucket.
+- `scripts/push-images.sh`: uploads generated rootfs images to the object store named by its `s3`/`gcs` backend argument.
+- `scripts/test-push-images.sh`: regression checks for that backend selection.
 - `scripts/fc-init/`: fallback bundled `fc-init` source for CI.
 
 ## Conventions
@@ -29,6 +30,7 @@ For YAML-only changes, inspect schema consistency against the main repo docs.
 For image pipeline changes, validate:
 
 - `shellcheck scripts/docker-to-rootfs.sh`
+- `bash scripts/test-push-images.sh` when touching `push-images.sh`, the `push-*` Makefile targets, or the workflow's bucket resolution. CI exports both bucket variables, so the backend must be selected explicitly rather than inferred.
 - A targeted local rootfs build when Docker, `jq`, `mkfs.ext4`, and a linux/amd64 `fc-init` are available.
 
 For CI-equivalent validation, run `make build`, but skip `make push`.
