@@ -28,7 +28,17 @@ cd "$REPO_ROOT"
 
 BACKEND="${1:-}"
 
-TARGET_PLATFORM="${TARGET_PLATFORM:-linux/amd64}"
+# Deliberately no default. `make build-arm64` sets TARGET_PLATFORM inside its
+# own recipe, so a defaulted push would let `make build-arm64 && make push-s3`
+# publish arm64 images under amd64/ and overwrite them in the now-shared bucket.
+# CI always sets it explicitly, so requiring it costs nothing.
+if [ -z "${TARGET_PLATFORM:-}" ]; then
+    echo "ERROR: TARGET_PLATFORM must be set; it selects the <arch>/ key prefix" >&2
+    echo "Pass the platform the images were built for, e.g.:" >&2
+    echo "  TARGET_PLATFORM=linux/arm64 make push-s3" >&2
+    exit 1
+fi
+
 case "$TARGET_PLATFORM" in
     linux/amd64 | linux/arm64)
         TARGET_ARCH="${TARGET_PLATFORM##*/}"

@@ -1,4 +1,6 @@
-TARGET_PLATFORM ?= linux/amd64
+# Intentionally undefaulted. build-images.sh defaults to linux/amd64 on its own,
+# while push-images.sh requires an explicit value: defaulting here would make
+# `make build-arm64 && make push-s3` publish arm64 images under the amd64 prefix.
 
 .PHONY: build build-amd64 build-arm64 push push-s3 push-gcs
 

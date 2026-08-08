@@ -109,10 +109,18 @@ run_case "push-s3 fails on an unsupported target platform" \
     push-s3 FAIL TARGET_PLATFORM=linux/riscv64 S3_IMAGES_BUCKET=s3-bucket
 
 run_case "push-s3 fails when the S3 bucket is unset" \
-    push-s3 FAIL GCS_IMAGES_BUCKET=gcs-bucket
+    push-s3 FAIL TARGET_PLATFORM=linux/amd64 GCS_IMAGES_BUCKET=gcs-bucket
 
 run_case "push without a backend fails when both buckets are set" \
-    push FAIL S3_IMAGES_BUCKET=s3-bucket GCS_IMAGES_BUCKET=gcs-bucket
+    push FAIL TARGET_PLATFORM=linux/amd64 S3_IMAGES_BUCKET=s3-bucket GCS_IMAGES_BUCKET=gcs-bucket
+
+# The build-arm64 footgun: build-arm64 sets TARGET_PLATFORM in its own recipe,
+# so a defaulted push would send arm64 images to the amd64 prefix.
+run_case "push-s3 fails when TARGET_PLATFORM is unset" \
+    push-s3 FAIL S3_IMAGES_BUCKET=s3-bucket
+
+run_case "push-gcs fails when TARGET_PLATFORM is unset" \
+    push-gcs FAIL GCS_IMAGES_BUCKET=gcs-bucket
 
 # The cases above prove push-images.sh honours TARGET_PLATFORM, but they run the
 # Makefile directly and never see the workflow. Both architectures now publish to
@@ -122,16 +130,21 @@ run_case "push without a backend fails when both buckets are set" \
 # Assert the wiring exists.
 WORKFLOW="$REPO_ROOT/.github/workflows/build-images.yaml"
 for step in push-s3 push-gcs; do
-    if awk -v want="make $step" '
-        /^      - name:/ { in_step = 1; seen_platform = 0 }
-        /TARGET_PLATFORM:/ { if (in_step) seen_platform = 1 }
-        $0 ~ ("run: " want) { if (seen_platform) { found = 1 } }
+    # Match the value, not just the key. A hardcoded TARGET_PLATFORM would keep
+    # the key present while pinning both matrix legs to one architecture, which
+    # is precisely the overwrite this guards against.
+    if awk -v want="run: make $step" '
+        /^      - name:/ { in_step = 1; wired = 0 }
+        in_step && index($0, "TARGET_PLATFORM: ${{ matrix.target_platform }}") { wired = 1 }
+        in_step && index($0, want) { if (wired) found = 1 }
         END { exit !found }
     ' "$WORKFLOW"; then
-        echo "ok: workflow passes TARGET_PLATFORM to the $step step"
+        echo "ok: workflow passes the matrix architecture to the $step step"
     else
-        echo "FAIL: the workflow step running 'make $step' does not set TARGET_PLATFORM"
-        echo "    without it the arm64 build publishes under the amd64 prefix"
+        echo "FAIL: the workflow step running 'make $step' does not set"
+        echo "    TARGET_PLATFORM: \${{ matrix.target_platform }}"
+        echo "    Without the matrix value both legs publish under one prefix,"
+        echo "    so the arm64 build overwrites the amd64 images."
         FAILURES=$((FAILURES + 1))
     fi
 done

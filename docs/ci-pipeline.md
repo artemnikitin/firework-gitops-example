@@ -56,8 +56,13 @@ unrecognised `TARGET_PLATFORM` rather than publishing without a prefix.
 The Firework agent resolves the prefix from the architecture of the node it runs
 on, so a node can only ever fetch images built for itself. Host and guest
 architecture must match; before this layout a mismatch surfaced only at microVM
-start, as a guest kernel panic. It now fails at image sync with a missing-object
-error naming the key.
+start, as a guest kernel panic.
+
+A missing image now fails at sync with an error naming the key — but only on a
+node that has no local copy. The agent falls back to a cached image whenever an
+object is absent, logging at debug level, so a node that already holds images
+from the previous layout stays quiet. Verify bucket contents directly rather
+than waiting for nodes to report a gap.
 
 This also means a mixed-architecture fleet needs no extra configuration: node
 configs carry no architecture, so one desired state serves both.
@@ -72,15 +77,31 @@ wrong object store. `scripts/test-push-images.sh` covers this and runs in CI.
 ### Migrating from per-architecture buckets
 
 Objects previously sat at the bucket root, and the agent read them there. The
-agent change that reads `<arch>/` keys must not ship first, or every node fails
-with a missing image.
+agent change that reads `<arch>/` keys must not ship first: a freshly built node
+would find nothing under its prefix and fail. An existing node keeps running on
+its cached images, so the damage is uneven and easy to miss — which is why the
+verification below is a diff rather than a glance.
 
 1. Merge this repository's change and run `workflow_dispatch` with
    `force_rebuild = true`. Change-aware builds only publish services that
    changed, so without a forced run the new prefixes stay incomplete.
-2. Confirm both `amd64/` and `arm64/` prefixes are populated in each bucket.
+2. Diff the object sets, do not eyeball them. Every flat object must have a
+   counterpart under each architecture prefix that has nodes:
+
+   ```bash
+   aws s3 ls "s3://$BUCKET/" | awk '{print $4}' | grep -v '/$' | sort > /tmp/flat
+   aws s3 ls "s3://$BUCKET/amd64/" | awk '{print $4}' | sort > /tmp/amd64
+   comm -23 /tmp/flat /tmp/amd64   # must be empty before step 4
+   ```
+
+   A forced rebuild that skipped a service — a build failure, or a service no
+   longer in the tenant set — leaves a gap here. Agents will not report it:
+   they serve the cached local copy.
 3. Roll out agents that resolve arch-prefixed keys.
-4. Delete the flat objects at the bucket root.
+4. Delete the flat objects at the bucket root, only once step 2 shows no
+   difference. Deleting while a gap remains leaves nodes running an image that
+   exists nowhere in the bucket, which surfaces at the next node replacement,
+   long after the migration.
 
 Un-upgraded agents keep reading the frozen flat objects until they are replaced,
 so the intermediate state is safe. Expect one full re-download per node at
