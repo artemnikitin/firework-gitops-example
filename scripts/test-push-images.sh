@@ -114,6 +114,28 @@ run_case "push-s3 fails when the S3 bucket is unset" \
 run_case "push without a backend fails when both buckets are set" \
     push FAIL S3_IMAGES_BUCKET=s3-bucket GCS_IMAGES_BUCKET=gcs-bucket
 
+# The cases above prove push-images.sh honours TARGET_PLATFORM, but they run the
+# Makefile directly and never see the workflow. Both architectures now publish to
+# one bucket under identical object names, so a missing TARGET_PLATFORM on an
+# upload step makes the arm64 leg publish to amd64/ and overwrite the amd64
+# images — silently, until a node boots a guest built for the wrong architecture.
+# Assert the wiring exists.
+WORKFLOW="$REPO_ROOT/.github/workflows/build-images.yaml"
+for step in push-s3 push-gcs; do
+    if awk -v want="make $step" '
+        /^      - name:/ { in_step = 1; seen_platform = 0 }
+        /TARGET_PLATFORM:/ { if (in_step) seen_platform = 1 }
+        $0 ~ ("run: " want) { if (seen_platform) { found = 1 } }
+        END { exit !found }
+    ' "$WORKFLOW"; then
+        echo "ok: workflow passes TARGET_PLATFORM to the $step step"
+    else
+        echo "FAIL: the workflow step running 'make $step' does not set TARGET_PLATFORM"
+        echo "    without it the arm64 build publishes under the amd64 prefix"
+        FAILURES=$((FAILURES + 1))
+    fi
+done
+
 if [ "$FAILURES" -ne 0 ]; then
     echo "$FAILURES check(s) failed" >&2
     exit 1
