@@ -8,9 +8,9 @@ It builds the tenant rootfs images twice, once for `linux/arm64` and once for
 On pushes to `main`, on the weekly schedule, and on manual dispatch (when run
 against `main`), each matrix build job publishes its architecture to the
 configured S3 bucket and, when configured, authenticates to GCP in the same job
-and uploads that architecture to its GCS bucket. Keep the buckets
-architecture-specific: the generated `*-rootfs.ext4` filenames are the same
-across architectures, so sharing one bucket would cause overwrites.
+and uploads that architecture to its GCS bucket. Both architectures share one
+bucket per cloud: the generated `*-rootfs.ext4` filenames are identical across
+architectures, so each is stored under an `<arch>/` key prefix.
 
 ## Change-aware builds
 
@@ -37,39 +37,57 @@ before this feature existed.
 
 ## Bucket configuration
 
-Both legacy variables mean the amd64 bucket, because both providers default to
-x86_64 nodes: `S3_IMAGES_BUCKET` is the amd64 S3 bucket and `GCS_IMAGES_BUCKET`
-is the amd64 GCS bucket. The explicit `*_AMD64` names are still supported and
-take precedence when set. Publishing the arm64 build requires opting in with
-`S3_IMAGES_BUCKET_ARM64` or `GCS_IMAGES_BUCKET_ARM64`; without them the arm64
-build still runs but uploads nothing.
+One bucket per cloud holds every architecture: `S3_IMAGES_BUCKET` and
+`GCS_IMAGES_BUCKET`. There are no per-architecture bucket variables. Both matrix
+legs upload to the same bucket, under a key prefix taken from the platform they
+were built for:
 
-Resolved upload targets per build:
+```text
+<images-bucket>/
+  amd64/tenant-1-kibana-rootfs.ext4
+  arm64/tenant-1-kibana-rootfs.ext4
+```
 
-| Build | S3 bucket | GCS bucket |
-| --- | --- | --- |
-| amd64 | `S3_IMAGES_BUCKET_AMD64`, else `S3_IMAGES_BUCKET` | `GCS_IMAGES_BUCKET_AMD64`, else `GCS_IMAGES_BUCKET` |
-| arm64 | `S3_IMAGES_BUCKET_ARM64` | `GCS_IMAGES_BUCKET_ARM64` |
+The prefix uses the Go architecture vocabulary (`amd64`, `arm64`) that
+`TARGET_PLATFORM` already carries — deliberately not the AWS `x86_64` spelling,
+which the agent would never look under. `push-images.sh` rejects an
+unrecognised `TARGET_PLATFORM` rather than publishing without a prefix.
 
-Both variables are exported for the amd64 build, so `push-images.sh` takes an
+The Firework agent resolves the prefix from the architecture of the node it runs
+on, so a node can only ever fetch images built for itself. Host and guest
+architecture must match; before this layout a mismatch surfaced only at microVM
+start, as a guest kernel panic. It now fails at image sync with a missing-object
+error naming the key.
+
+This also means a mixed-architecture fleet needs no extra configuration: node
+configs carry no architecture, so one desired state serves both.
+
+Both bucket variables are exported for every build, so `push-images.sh` takes an
 explicit `s3` or `gcs` backend argument rather than inferring one from whichever
-bucket is set. `make push-s3` and `make push-gcs` pass it. Inference is still
-accepted when exactly one bucket variable is set, and errors when both are, so
-a publish can never silently go to the wrong object store.
-`scripts/test-push-images.sh` covers this and runs in CI.
+bucket is set. `make push-s3` and `make push-gcs` pass it, along with
+`TARGET_PLATFORM`. Inference is still accepted when exactly one bucket variable
+is set, and errors when both are, so a publish can never silently go to the
+wrong object store. `scripts/test-push-images.sh` covers this and runs in CI.
 
-Host and guest architecture must match, and a mismatch fails at microVM start
-rather than at deploy time. The AWS data plane in
-`firework-deployment-example` now defaults to x86_64 nodes using nested
-virtualization rather than bare-metal Graviton, so it consumes the amd64 rootfs
-images; the GCP data plane has always been x86_64.
+### Migrating from per-architecture buckets
 
-`S3_IMAGES_BUCKET` previously meant the arm64 S3 bucket, so an existing
-deployment that keeps its value will now receive amd64 images in that same
-bucket, replacing the arm64 objects under identical names. That is intended for
-the default x86_64 AWS node. A deployment that still runs Graviton nodes
-(`node_ami_architecture = "arm64"`) must set `S3_IMAGES_BUCKET_ARM64` and point
-`s3_images_bucket_id` at that bucket instead.
+Objects previously sat at the bucket root, and the agent read them there. The
+agent change that reads `<arch>/` keys must not ship first, or every node fails
+with a missing image.
+
+1. Merge this repository's change and run `workflow_dispatch` with
+   `force_rebuild = true`. Change-aware builds only publish services that
+   changed, so without a forced run the new prefixes stay incomplete.
+2. Confirm both `amd64/` and `arm64/` prefixes are populated in each bucket.
+3. Roll out agents that resolve arch-prefixed keys.
+4. Delete the flat objects at the bucket root.
+
+Un-upgraded agents keep reading the frozen flat objects until they are replaced,
+so the intermediate state is safe. Expect one full re-download per node at
+cutover: the write-token sidecars survive, but a republished object under a new
+key carries a new token. A deployment that publishes kernels to the bucket
+rather than baking them into the node image must republish those under `<arch>/`
+too.
 
 ## CI config validation
 

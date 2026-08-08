@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 
-# Regression checks for scripts/push-images.sh backend selection.
+# Regression checks for scripts/push-images.sh backend selection and the
+# architecture key prefix.
 #
-# CI exports both S3_IMAGES_BUCKET and GCS_IMAGES_BUCKET for the amd64 build, so
+# CI exports both S3_IMAGES_BUCKET and GCS_IMAGES_BUCKET for every build, so
 # `make push-s3` must upload to S3 even though a GCS bucket is also configured.
 # An earlier version inferred the backend and preferred GCS, which silently sent
 # the AWS images to GCS and left the S3 bucket untouched.
+#
+# One bucket per cloud holds every architecture, so the destination key must
+# carry an <arch>/ prefix derived from TARGET_PLATFORM. Publishing to the wrong
+# prefix — or to none — is invisible until a node boots a guest built for
+# another architecture.
 #
 # Runs the real Makefile targets with `aws` and `gcloud` stubbed on PATH.
 
@@ -72,20 +78,35 @@ run_case() {
 
 # The regression: both buckets set, as the amd64 CI leg exports them.
 run_case "push-s3 uploads to S3 when both buckets are set" \
-    push-s3 "aws s3 cp demo-rootfs.ext4 s3://s3-bucket/demo-rootfs.ext4" \
-    S3_IMAGES_BUCKET=s3-bucket GCS_IMAGES_BUCKET=gcs-bucket
+    push-s3 "aws s3 cp demo-rootfs.ext4 s3://s3-bucket/amd64/demo-rootfs.ext4" \
+    TARGET_PLATFORM=linux/amd64 S3_IMAGES_BUCKET=s3-bucket GCS_IMAGES_BUCKET=gcs-bucket
 
 run_case "push-gcs uploads to GCS when both buckets are set" \
-    push-gcs "gcloud storage cp demo-rootfs.ext4 gs://gcs-bucket/demo-rootfs.ext4" \
-    S3_IMAGES_BUCKET=s3-bucket GCS_IMAGES_BUCKET=gcs-bucket
+    push-gcs "gcloud storage cp demo-rootfs.ext4 gs://gcs-bucket/amd64/demo-rootfs.ext4" \
+    TARGET_PLATFORM=linux/amd64 S3_IMAGES_BUCKET=s3-bucket GCS_IMAGES_BUCKET=gcs-bucket
 
 run_case "push-s3 uploads to S3 when only the S3 bucket is set" \
-    push-s3 "aws s3 cp demo-rootfs.ext4 s3://s3-bucket/demo-rootfs.ext4" \
-    S3_IMAGES_BUCKET=s3-bucket
+    push-s3 "aws s3 cp demo-rootfs.ext4 s3://s3-bucket/amd64/demo-rootfs.ext4" \
+    TARGET_PLATFORM=linux/amd64 S3_IMAGES_BUCKET=s3-bucket
 
 run_case "push-gcs uploads to GCS when only the GCS bucket is set" \
-    push-gcs "gcloud storage cp demo-rootfs.ext4 gs://gcs-bucket/demo-rootfs.ext4" \
-    GCS_IMAGES_BUCKET=gcs-bucket
+    push-gcs "gcloud storage cp demo-rootfs.ext4 gs://gcs-bucket/amd64/demo-rootfs.ext4" \
+    GCS_IMAGES_BUCKET=gcs-bucket TARGET_PLATFORM=linux/amd64
+
+# The arm64 leg must land under its own prefix; sharing one bucket makes a
+# wrong prefix an overwrite of the other architecture.
+run_case "push-s3 publishes the arm64 build under the arm64 prefix" \
+    push-s3 "aws s3 cp demo-rootfs.ext4 s3://s3-bucket/arm64/demo-rootfs.ext4" \
+    TARGET_PLATFORM=linux/arm64 S3_IMAGES_BUCKET=s3-bucket GCS_IMAGES_BUCKET=gcs-bucket
+
+run_case "push-gcs publishes the arm64 build under the arm64 prefix" \
+    push-gcs "gcloud storage cp demo-rootfs.ext4 gs://gcs-bucket/arm64/demo-rootfs.ext4" \
+    TARGET_PLATFORM=linux/arm64 S3_IMAGES_BUCKET=s3-bucket GCS_IMAGES_BUCKET=gcs-bucket
+
+# An unrecognised platform must fail rather than invent a prefix: the agent
+# would look under amd64/ or arm64/ and find nothing.
+run_case "push-s3 fails on an unsupported target platform" \
+    push-s3 FAIL TARGET_PLATFORM=linux/riscv64 S3_IMAGES_BUCKET=s3-bucket
 
 run_case "push-s3 fails when the S3 bucket is unset" \
     push-s3 FAIL GCS_IMAGES_BUCKET=gcs-bucket
