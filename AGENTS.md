@@ -30,7 +30,7 @@ For YAML-only changes, inspect schema consistency against the main repo docs.
 For image pipeline changes, validate:
 
 - `shellcheck scripts/docker-to-rootfs.sh`
-- `bash scripts/test-push-images.sh` when touching `push-images.sh`, the `push-*` Makefile targets, or the workflow's upload steps. CI exports both bucket variables, so the backend must be selected explicitly rather than inferred, and `TARGET_PLATFORM` must reach the push targets or images publish under the wrong architecture prefix.
+- `bash scripts/test-push-images.sh` when touching `push-images.sh`, the `push-*` Makefile targets, or the workflow's upload steps. Each workflow upload step exports only its own provider's bucket, but a local run can have both set, so the backend must be selected explicitly rather than inferred. `TARGET_PLATFORM` must also reach the push targets, or images publish under the wrong architecture prefix.
 - A targeted local rootfs build when Docker, `jq`, `mkfs.ext4`, and a linux/amd64 `fc-init` are available.
 
 For CI-equivalent validation, run `make build`, but skip `make push`.

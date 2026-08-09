@@ -6,8 +6,9 @@
 #            matching bucket variable is required and the other is ignored.
 #            When omitted the backend is inferred from whichever single bucket
 #            variable is set, and having both set is an error rather than a
-#            silent preference — CI exports both, so inference cannot
-#            distinguish "push to S3" from "push to GCS" on its own.
+#            silent preference: inference cannot distinguish "push to S3" from
+#            "push to GCS" on its own, and a caller with both configured would
+#            otherwise publish to whichever one the script happened to prefer.
 #
 # One bucket per cloud holds every architecture. Objects are uploaded under an
 # <arch>/ prefix, and the Firework agent reads the prefix matching the node it

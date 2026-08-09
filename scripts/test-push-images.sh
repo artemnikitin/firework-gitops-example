@@ -77,7 +77,7 @@ run_case() {
     fi
 }
 
-# The regression: both buckets set, as the amd64 CI leg exports them.
+# The regression: both buckets set, as a local run with both configured has.
 run_case "push-s3 uploads to S3 when both buckets are set" \
     push-s3 "aws s3 cp demo-rootfs.ext4 s3://s3-bucket/amd64/demo-rootfs.ext4" \
     TARGET_PLATFORM=linux/amd64 S3_IMAGES_BUCKET=s3-bucket GCS_IMAGES_BUCKET=gcs-bucket
