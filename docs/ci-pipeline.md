@@ -58,57 +58,44 @@ on, so a node can only ever fetch images built for itself. Host and guest
 architecture must match; before this layout a mismatch surfaced only at microVM
 start, as a guest kernel panic.
 
-A missing image now fails at sync with an error naming the key — but only on a
-node that has no local copy. The agent falls back to a cached image whenever an
-object is absent, logging at debug level, so a node that already holds images
-from the previous layout stays quiet. Verify bucket contents directly rather
-than waiting for nodes to report a gap.
+A missing image fails at sync with an error naming the key — but only on a node
+that has no local copy. The agent falls back to a cached image whenever an
+object is absent, logging at debug level, so a node that already holds the image
+stays quiet. Verify bucket contents directly rather than waiting for nodes to
+report a gap.
 
 This also means a mixed-architecture fleet needs no extra configuration: node
 configs carry no architecture, so one desired state serves both.
 
-Both bucket variables are exported for every build, so `push-images.sh` takes an
-explicit `s3` or `gcs` backend argument rather than inferring one from whichever
-bucket is set. `make push-s3` and `make push-gcs` pass it, along with
-`TARGET_PLATFORM`. Inference is still accepted when exactly one bucket variable
-is set, and errors when both are, so a publish can never silently go to the
-wrong object store. `scripts/test-push-images.sh` covers this and runs in CI.
+`push-images.sh` takes an explicit `s3` or `gcs` backend argument rather than
+inferring one from whichever bucket is set, and `make push-s3` / `make push-gcs`
+pass it along with `TARGET_PLATFORM`. Each workflow upload step now exports only
+its own provider's bucket, so inference would happen to work — but a local run
+or a future step that exports both must not be able to publish to the wrong
+object store. Inference is therefore still accepted only when exactly one bucket
+variable is set, and errors when both are.
+`scripts/test-push-images.sh` covers this and runs in CI.
 
-### Migrating from per-architecture buckets
+### Objects from the previous layout
 
-Objects previously sat at the bucket root, and the agent read them there. The
-agent change that reads `<arch>/` keys must not ship first: a freshly built node
-would find nothing under its prefix and fail. An existing node keeps running on
-its cached images, so the damage is uneven and easy to miss — which is why the
-verification below is a diff rather than a glance.
+Before this layout, objects sat at the bucket root and both the agent and node
+bootstrap read them there. Nothing reads the bucket root now, so any root-level
+`*-rootfs.ext4` left over from that layout is inert and can be deleted whenever
+convenient:
 
-1. Merge this repository's change and run `workflow_dispatch` with
-   `force_rebuild = true`. Change-aware builds only publish services that
-   changed, so without a forced run the new prefixes stay incomplete.
-2. Diff the object sets, do not eyeball them. Every flat object must have a
-   counterpart under each architecture prefix that has nodes:
+```bash
+aws s3api list-objects-v2 --bucket "$BUCKET" --delimiter / \
+  --query 'Contents[].Key' --output text | tr '\t' '\n'
+```
 
-   ```bash
-   aws s3 ls "s3://$BUCKET/" | awk '{print $4}' | grep -v '/$' | sort > /tmp/flat
-   aws s3 ls "s3://$BUCKET/amd64/" | awk '{print $4}' | sort > /tmp/amd64
-   comm -23 /tmp/flat /tmp/amd64   # must be empty before step 4
-   ```
+`list-objects-v2` with `--delimiter /` returns only root-level keys, without the
+`PRE <prefix>/` rows that a plain `aws s3 ls` emits — those rows have no object
+name in the column a naive parse would read, which silently produces empty
+entries.
 
-   A forced rebuild that skipped a service — a build failure, or a service no
-   longer in the tenant set — leaves a gap here. Agents will not report it:
-   they serve the cached local copy.
-3. Roll out agents that resolve arch-prefixed keys.
-4. Delete the flat objects at the bucket root, only once step 2 shows no
-   difference. Deleting while a gap remains leaves nodes running an image that
-   exists nowhere in the bucket, which surfaces at the next node replacement,
-   long after the migration.
-
-Un-upgraded agents keep reading the frozen flat objects until they are replaced,
-so the intermediate state is safe. Expect one full re-download per node at
-cutover: the write-token sidecars survive, but a republished object under a new
-key carries a new token. A deployment that publishes kernels to the bucket
-rather than baking them into the node image must republish those under `<arch>/`
-too.
+Fresh nodes have no local image cache, so they depend on the prefixes being
+populated before they boot. Run a `force_rebuild` dispatch after any change to
+this pipeline and confirm both prefixes are present before deploying.
 
 ## CI config validation
 

@@ -153,6 +153,25 @@ jobs:
           COMPARE_BASE_SHA: ${{ env.COMPARE_BASE_SHA }}
         run: make build
 
+      # A run that is supposed to publish but has no bucket configured would
+      # otherwise stay green while uploading nothing, which is how images
+      # silently stop reaching a deployment. Fail instead: on a publishing run,
+      # at least one destination must exist.
+      - name: Check a publish destination is configured
+        if: env.SHOULD_UPLOAD == 'true'
+        env:
+          S3_IMAGES_BUCKET: ${{ vars.S3_IMAGES_BUCKET }}
+          GCS_IMAGES_BUCKET: ${{ vars.GCS_IMAGES_BUCKET }}
+        run: |
+          if [ -z "${S3_IMAGES_BUCKET:-}" ] && [ -z "${GCS_IMAGES_BUCKET:-}" ]; then
+            echo "::error title=No image bucket configured::This run publishes ${{ matrix.target_arch }} images, but neither S3_IMAGES_BUCKET nor GCS_IMAGES_BUCKET is set. Set at least one repository variable."
+            exit 1
+          fi
+          [ -n "${S3_IMAGES_BUCKET:-}" ] || \
+            echo "::warning title=No S3 image bucket::${{ matrix.target_arch }} images will not be published to S3."
+          [ -n "${GCS_IMAGES_BUCKET:-}" ] || \
+            echo "::warning title=No GCS image bucket::${{ matrix.target_arch }} images will not be published to GCS."
+
       # Both architectures publish to the same bucket per cloud, separated by an
       # <arch>/ key prefix that push-images.sh derives from TARGET_PLATFORM. The
       # agent reads the prefix matching its own node, so there is nothing

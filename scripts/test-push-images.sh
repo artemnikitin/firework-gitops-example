@@ -3,10 +3,11 @@
 # Regression checks for scripts/push-images.sh backend selection and the
 # architecture key prefix.
 #
-# CI exports both S3_IMAGES_BUCKET and GCS_IMAGES_BUCKET for every build, so
-# `make push-s3` must upload to S3 even though a GCS bucket is also configured.
-# An earlier version inferred the backend and preferred GCS, which silently sent
-# the AWS images to GCS and left the S3 bucket untouched.
+# `make push-s3` must upload to S3 even when a GCS bucket is also configured in
+# the environment. An earlier version inferred the backend and preferred GCS,
+# which silently sent the AWS images to GCS and left the S3 bucket untouched.
+# The workflow now exports only the relevant provider's bucket per upload step,
+# but a local run can still have both set, so the guarantee is still tested.
 #
 # One bucket per cloud holds every architecture, so the destination key must
 # carry an <arch>/ prefix derived from TARGET_PLATFORM. Publishing to the wrong
