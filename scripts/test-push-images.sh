@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
 
-# Regression checks for scripts/push-images.sh backend selection.
+# Regression checks for scripts/push-images.sh backend selection and the
+# architecture key prefix.
 #
-# CI exports both S3_IMAGES_BUCKET and GCS_IMAGES_BUCKET for the amd64 build, so
-# `make push-s3` must upload to S3 even though a GCS bucket is also configured.
-# An earlier version inferred the backend and preferred GCS, which silently sent
-# the AWS images to GCS and left the S3 bucket untouched.
+# `make push-s3` must upload to S3 even when a GCS bucket is also configured in
+# the environment. An earlier version inferred the backend and preferred GCS,
+# which silently sent the AWS images to GCS and left the S3 bucket untouched.
+# The workflow now exports only the relevant provider's bucket per upload step,
+# but a local run can still have both set, so the guarantee is still tested.
+#
+# One bucket per cloud holds every architecture, so the destination key must
+# carry an <arch>/ prefix derived from TARGET_PLATFORM. Publishing to the wrong
+# prefix — or to none — is invisible until a node boots a guest built for
+# another architecture.
 #
 # Runs the real Makefile targets with `aws` and `gcloud` stubbed on PATH.
 
@@ -70,28 +77,78 @@ run_case() {
     fi
 }
 
-# The regression: both buckets set, as the amd64 CI leg exports them.
+# The regression: both buckets set, as a local run with both configured has.
 run_case "push-s3 uploads to S3 when both buckets are set" \
-    push-s3 "aws s3 cp demo-rootfs.ext4 s3://s3-bucket/demo-rootfs.ext4" \
-    S3_IMAGES_BUCKET=s3-bucket GCS_IMAGES_BUCKET=gcs-bucket
+    push-s3 "aws s3 cp demo-rootfs.ext4 s3://s3-bucket/amd64/demo-rootfs.ext4" \
+    TARGET_PLATFORM=linux/amd64 S3_IMAGES_BUCKET=s3-bucket GCS_IMAGES_BUCKET=gcs-bucket
 
 run_case "push-gcs uploads to GCS when both buckets are set" \
-    push-gcs "gcloud storage cp demo-rootfs.ext4 gs://gcs-bucket/demo-rootfs.ext4" \
-    S3_IMAGES_BUCKET=s3-bucket GCS_IMAGES_BUCKET=gcs-bucket
+    push-gcs "gcloud storage cp demo-rootfs.ext4 gs://gcs-bucket/amd64/demo-rootfs.ext4" \
+    TARGET_PLATFORM=linux/amd64 S3_IMAGES_BUCKET=s3-bucket GCS_IMAGES_BUCKET=gcs-bucket
 
 run_case "push-s3 uploads to S3 when only the S3 bucket is set" \
-    push-s3 "aws s3 cp demo-rootfs.ext4 s3://s3-bucket/demo-rootfs.ext4" \
-    S3_IMAGES_BUCKET=s3-bucket
+    push-s3 "aws s3 cp demo-rootfs.ext4 s3://s3-bucket/amd64/demo-rootfs.ext4" \
+    TARGET_PLATFORM=linux/amd64 S3_IMAGES_BUCKET=s3-bucket
 
 run_case "push-gcs uploads to GCS when only the GCS bucket is set" \
-    push-gcs "gcloud storage cp demo-rootfs.ext4 gs://gcs-bucket/demo-rootfs.ext4" \
-    GCS_IMAGES_BUCKET=gcs-bucket
+    push-gcs "gcloud storage cp demo-rootfs.ext4 gs://gcs-bucket/amd64/demo-rootfs.ext4" \
+    GCS_IMAGES_BUCKET=gcs-bucket TARGET_PLATFORM=linux/amd64
+
+# The arm64 leg must land under its own prefix; sharing one bucket makes a
+# wrong prefix an overwrite of the other architecture.
+run_case "push-s3 publishes the arm64 build under the arm64 prefix" \
+    push-s3 "aws s3 cp demo-rootfs.ext4 s3://s3-bucket/arm64/demo-rootfs.ext4" \
+    TARGET_PLATFORM=linux/arm64 S3_IMAGES_BUCKET=s3-bucket GCS_IMAGES_BUCKET=gcs-bucket
+
+run_case "push-gcs publishes the arm64 build under the arm64 prefix" \
+    push-gcs "gcloud storage cp demo-rootfs.ext4 gs://gcs-bucket/arm64/demo-rootfs.ext4" \
+    TARGET_PLATFORM=linux/arm64 S3_IMAGES_BUCKET=s3-bucket GCS_IMAGES_BUCKET=gcs-bucket
+
+# An unrecognised platform must fail rather than invent a prefix: the agent
+# would look under amd64/ or arm64/ and find nothing.
+run_case "push-s3 fails on an unsupported target platform" \
+    push-s3 FAIL TARGET_PLATFORM=linux/riscv64 S3_IMAGES_BUCKET=s3-bucket
 
 run_case "push-s3 fails when the S3 bucket is unset" \
-    push-s3 FAIL GCS_IMAGES_BUCKET=gcs-bucket
+    push-s3 FAIL TARGET_PLATFORM=linux/amd64 GCS_IMAGES_BUCKET=gcs-bucket
 
 run_case "push without a backend fails when both buckets are set" \
-    push FAIL S3_IMAGES_BUCKET=s3-bucket GCS_IMAGES_BUCKET=gcs-bucket
+    push FAIL TARGET_PLATFORM=linux/amd64 S3_IMAGES_BUCKET=s3-bucket GCS_IMAGES_BUCKET=gcs-bucket
+
+# The build-arm64 footgun: build-arm64 sets TARGET_PLATFORM in its own recipe,
+# so a defaulted push would send arm64 images to the amd64 prefix.
+run_case "push-s3 fails when TARGET_PLATFORM is unset" \
+    push-s3 FAIL S3_IMAGES_BUCKET=s3-bucket
+
+run_case "push-gcs fails when TARGET_PLATFORM is unset" \
+    push-gcs FAIL GCS_IMAGES_BUCKET=gcs-bucket
+
+# The cases above prove push-images.sh honours TARGET_PLATFORM, but they run the
+# Makefile directly and never see the workflow. Both architectures now publish to
+# one bucket under identical object names, so a missing TARGET_PLATFORM on an
+# upload step makes the arm64 leg publish to amd64/ and overwrite the amd64
+# images — silently, until a node boots a guest built for the wrong architecture.
+# Assert the wiring exists.
+WORKFLOW="$REPO_ROOT/.github/workflows/build-images.yaml"
+for step in push-s3 push-gcs; do
+    # Match the value, not just the key. A hardcoded TARGET_PLATFORM would keep
+    # the key present while pinning both matrix legs to one architecture, which
+    # is precisely the overwrite this guards against.
+    if awk -v want="run: make $step" '
+        /^      - name:/ { in_step = 1; wired = 0 }
+        in_step && index($0, "TARGET_PLATFORM: ${{ matrix.target_platform }}") { wired = 1 }
+        in_step && index($0, want) { if (wired) found = 1 }
+        END { exit !found }
+    ' "$WORKFLOW"; then
+        echo "ok: workflow passes the matrix architecture to the $step step"
+    else
+        echo "FAIL: the workflow step running 'make $step' does not set"
+        echo "    TARGET_PLATFORM: \${{ matrix.target_platform }}"
+        echo "    Without the matrix value both legs publish under one prefix,"
+        echo "    so the arm64 build overwrites the amd64 images."
+        FAILURES=$((FAILURES + 1))
+    fi
+done
 
 if [ "$FAILURES" -ne 0 ]; then
     echo "$FAILURES check(s) failed" >&2

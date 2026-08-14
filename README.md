@@ -2,7 +2,7 @@
 
 > This is an example deployment intended for demonstration and learning purposes only. It is not hardened, audited, etc.
 
-Example GitOps repository for [Firework](https://github.com/artemnikitin/firework), focused on building Firecracker-ready rootfs images and publishing them to S3 and GCS via architecture-specific buckets. Both X86 and ARM64 images are built; X86 is published by default, because both the AWS and GCP data planes run x86_64 nodes, and ARM64 publishing is opt-in.
+Example GitOps repository for [Firework](https://github.com/artemnikitin/firework), focused on building Firecracker-ready rootfs images and publishing them to S3 and GCS. Both x86 and ARM64 images are built and published, to one bucket per cloud, under an `<arch>/` key prefix. The Firework agent reads the prefix matching the node it runs on, so a single bucket serves a mixed-architecture fleet.
 
 ## Related Repositories
 
