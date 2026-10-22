@@ -100,10 +100,18 @@ this pipeline and confirm both prefixes are present before deploying.
 ## CI config validation
 
 Before building images, the `validate-config` CI job runs Firework's
-`cmd/configcheck --require-remote-routing` against this repository's root, using
-the exact enricher of the persistent-volume core revision pinned directly in
-the workflow. This keeps validation aligned with the control plane and agents
-used by this example without requiring a repository variable.
+`cmd/configcheck --require-remote-routing` against this repository's root. The
+workflow pins the configuration contract to Firework
+[`8060a7e`](https://github.com/artemnikitin/firework/tree/8060a7e9cb7fd04c3a1bb884e35c30a2c1b5d22f),
+including duplicate host-port validation and service-name/volume-path bounds.
+This is an explicit source revision, not automatic discovery of the live
+control-plane or agent version. Keep the pin aligned with the deployed
+runtime's configuration contract when rolling out core changes; update and
+validate it deliberately rather than following a floating branch.
+
+Host ports may repeat across services when the scheduler can place them on
+separate nodes. A repeated host port within one service is invalid and fails
+validation before image builds.
 
 CI image builds compile the bundled `scripts/fc-init/main.go`. This keeps the
 guest mount contract in the same GitOps change as the volume workload. Local

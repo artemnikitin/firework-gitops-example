@@ -34,7 +34,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: artemnikitin/firework
-          ref: d7c9596080210dadfb271d2ce9eb8543809f2e21
+          ref: 8060a7e9cb7fd04c3a1bb884e35c30a2c1b5d22f
           path: .firework
           token: ${{ secrets.FIREWORK_GITHUB_TOKEN || github.token }}
 

@@ -15,7 +15,7 @@ This is the example GitOps input repo for Firework. It defines tenant service YA
 - `scripts/docker-to-rootfs.sh`: converts Docker images into ext4 rootfs images.
 - `scripts/push-images.sh`: uploads generated rootfs images to the object store named by its `s3`/`gcs` backend argument, under an `<arch>/` key prefix derived from `TARGET_PLATFORM`.
 - `scripts/test-push-images.sh`: regression checks for that backend selection and the architecture prefix.
-- `scripts/fc-init/`: fallback bundled `fc-init` source for CI.
+- `scripts/fc-init/`: bundled `fc-init` source compiled by CI and by local builds unless `FC_INIT_BIN` or `FC_INIT_VERSION` selects another binary.
 
 ## Conventions
 
